@@ -29,7 +29,7 @@ class BPM_Assets {
 	 * @return void
 	 */
     public function enqueue_admin_assets( $hook_suffix ) {
-        // Be permissive: load assets on any Bakery Production Manager screen
+        // Load assets on any Bakery Production Manager screen
         $is_plugin_screen = ( false !== strpos( (string) $hook_suffix, 'bakery-production-manager' ) );
         if ( ! $is_plugin_screen ) {
             return;
@@ -121,16 +121,12 @@ class BPM_Assets {
                 true
             );
 
-            // Early inline ping to verify script printing
-            wp_add_inline_script( 'bpm-reports', 'window.bpmDebug = true; try { console.log("[BPM Reports] inline before file", window.bpmReports); } catch(e) {}', 'before' );
-
             wp_localize_script(
                 'bpm-reports',
                 'bpmReports',
                 array(
                     'ajaxUrl'    => admin_url( 'admin-ajax.php' ),
                     'nonce'      => wp_create_nonce( 'bpm_ajax_nonce' ),
-                    'debug'      => true,
                     'messages'   => array(
                         'noData'       => __( 'No data found for the selected filters.', 'bakery-production-manager' ),
                         'csvError'     => __( 'Unable to export CSV at this time.', 'bakery-production-manager' ),
@@ -163,7 +159,6 @@ class BPM_Assets {
                     'ajaxUrl'   => admin_url( 'admin-ajax.php' ),
                     'nonce'     => wp_create_nonce( 'bpm_ajax_nonce' ),
                     'unitTypes' => $unit_types,
-                    'debug'     => true,
                     'messages'  => array(
                         'saved' => __( 'Settings updated successfully.', 'bakery-production-manager' ),
                         'error' => __( 'Unable to save settings. Please try again.', 'bakery-production-manager' ),

@@ -12,10 +12,6 @@
 		},
 
 		parseJsonResponse(payload) {
-			const debug = !!(window.bpmDebug);
-			if (debug) {
-				try { console.log('[BPM][parseJson] raw type:', typeof payload, 'preview:', typeof payload === 'string' ? payload.slice(0, 200) : payload); } catch (e) {}
-			}
 			if (payload === null || typeof payload === 'undefined') {
 				return null;
 			}
@@ -62,20 +58,15 @@
 			}
 
 				try {
-					const parsed = JSON.parse(text);
-					if (debug) { try { console.log('[BPM][parseJson] parsed OK'); } catch (e) {} }
-					return parsed;
+					return JSON.parse(text);
 				} catch (error) {
-					if (debug) { try { console.warn('[BPM][parseJson] primary parse failed:', error && error.message); } catch (e) {} }
 					try {
 						const fallbackMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
 						if (fallbackMatch && fallbackMatch[1]) {
-							const alt = JSON.parse(fallbackMatch[1]);
-							if (debug) { try { console.log('[BPM][parseJson] parsed via fallback'); } catch (e) {} }
-							return alt;
+							return JSON.parse(fallbackMatch[1]);
 						}
 					} catch (nestedError) {
-						if (debug) { try { console.error('[BPM][parseJson] fallback parse failed:', nestedError && nestedError.message); } catch (e) {} }
+						// Ignore
 					}
 				}
 

@@ -6,10 +6,6 @@
 		return;
 	}
 
-	// Enable console debugging
-	window.bpmDebug = (typeof window.bpmDebug !== 'undefined') ? window.bpmDebug : (bpmReports && bpmReports.debug ? !!bpmReports.debug : true);
-	const _bpmLog = (...args) => { if (window.bpmDebug && window.console && console.log) { try { console.log('[BPM Reports]', ...args); } catch (e) {} } };
-
 	const ReportsApp = {
 		init() {
 			this.$container = $('.bpm-reports');
@@ -29,21 +25,18 @@
 
 		// Ensure dates are set even if optional libs (Select2) fail to load
 		this.ensureDefaultDates(true);
-		_bpmLog('init -> dates defaulted', this.$start.val(), this.$end.val());
 		this.setupSelect2();
 		this.bindEvents();
-		_bpmLog('init -> starting initial fetch');
 		this.fetchReport();
 	},
 
 	setupSelect2() {
-		_bpmLog('setupSelect2');
-		if (!this.$product || !this.$product.length) { _bpmLog('no product select found'); return; }
+		if (!this.$product || !this.$product.length) { return; }
 
 		// Prefer Select2; fall back to WooCommerce's SelectWoo when available
 		const hasSelect2 = typeof this.$product.select2 === 'function';
 		const hasSelectWoo = typeof this.$product.selectWoo === 'function';
-		if (!hasSelect2 && !hasSelectWoo) { _bpmLog('Select2/SelectWoo not available, skipping enhancement'); return; }
+		if (!hasSelect2 && !hasSelectWoo) { return; }
 		const initFn = hasSelect2 ? 'select2' : 'selectWoo';
 
 		const $dropdownParent = this.$product.closest('.bpm-report-filters');
@@ -66,9 +59,7 @@
 					};
 				},
 				processResults(response) {
-					_bpmLog('select2 processResults raw', response);
 					const parsed = BPMUtils.parseJsonResponse(response);
-					_bpmLog('select2 processResults parsed', parsed);
 					if (parsed && parsed.success && parsed.data) {
 						return {
 							results: parsed.data.results,
@@ -118,7 +109,6 @@
 			end_date: endDate,
 			product_id: this.$product.val() || '',
 		};
-		_bpmLog('getFilters', f);
 		return f;
 	},
 
@@ -132,7 +122,7 @@
 		}
 
 		BPMUtils.block(this.$container);
-		_bpmLog('fetchReport -> ajax start', filters);
+
 
 			$.ajax({
 				url: bpmReports.ajaxUrl,
@@ -145,9 +135,7 @@
 				},
 			})
 				.done((rawResponse) => {
-					_bpmLog('fetchReport -> ajax done, raw length', rawResponse && rawResponse.length);
 					const response = BPMUtils.parseJsonResponse(rawResponse);
-					_bpmLog('fetchReport -> parsed', response);
 
 					if (!response || !response.success || !response.data) {
 						const message = response && response.data && response.data.message
@@ -164,7 +152,6 @@
 					this.renderChart(response.data.chart || {});
 				})
 				.fail((jqXHR) => {
-					_bpmLog('fetchReport -> ajax fail', jqXHR && jqXHR.status, jqXHR && jqXHR.responseText && jqXHR.responseText.slice(0, 200));
 					const parsed = BPMUtils.parseJsonResponse(jqXHR && jqXHR.responseText ? jqXHR.responseText : null);
 					const message = parsed && parsed.data && parsed.data.message
 						? parsed.data.message
@@ -173,7 +160,6 @@
 					BPMUtils.showNotice(message, 'error');
 				})
 				.always(() => {
-					_bpmLog('fetchReport -> ajax always');
 					BPMUtils.unblock(this.$container);
 				});
 		},
@@ -211,7 +197,6 @@
 		},
 
 		renderTable(rows) {
-			_bpmLog('renderTable rows', Array.isArray(rows) ? rows.length : 0);
 			if (!rows.length) {
 				const emptyMessage = (bpmReports.labels && bpmReports.labels.noData) || 'No data available.';
 				this.renderEmpty(emptyMessage);
@@ -241,7 +226,6 @@
 		},
 
 		renderTotals(totals) {
-			_bpmLog('renderTotals', totals);
 			this.$totals.produced.text(BPMUtils.formatNumber(totals.produced || 0));
 			this.$totals.wasted.text(BPMUtils.formatNumber(totals.wasted || 0));
 			this.$totals.net.text(BPMUtils.formatNumber(totals.net_added || 0));
@@ -251,7 +235,6 @@
 		},
 
 		renderChart(chartData) {
-			_bpmLog('renderChart labels', chartData && chartData.labels ? chartData.labels.length : 0);
 			const ctx = document.getElementById('bpm-report-chart').getContext('2d');
 
 			if (this.chart) {
@@ -264,7 +247,7 @@
 			}
 
 			// If Chart.js failed to load (offline), skip rendering gracefully
-			if (typeof window.Chart === 'undefined') { _bpmLog('Chart.js missing, skip render'); return; }
+			if (typeof window.Chart === 'undefined') { return; }
 
 			const labels = bpmReports.labels || {};
 			this.chart = new window.Chart(ctx, {

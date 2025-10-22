@@ -168,9 +168,36 @@
 
 .bpm-report-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	grid-template-columns: repeat(3, minmax(200px, 1fr));
 	gap: 16px;
-	margin-bottom: 16px;
+	margin-bottom: 12px;
+}
+
+.bpm-report-filters label {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	font-weight: 600;
+}
+
+.bpm-report-filters input[type="date"],
+.bpm-report-filters select {
+	width: 100%;
+	min-height: 34px;
+	padding: 6px 10px;
+	border-radius: 6px;
+	border: 1px solid #cbd5e1;
+}
+
+.bpm-report-filters .bpm-actions {
+	margin-top: 8px;
+	justify-content: flex-start;
+}
+
+@media (max-width: 1024px) {
+	.bpm-report-grid {
+		grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	}
 }
 
 .bpm-table-wrapper {
