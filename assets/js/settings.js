@@ -37,34 +37,40 @@
 
 			BPMUtils.block(this.$form);
 
-			$.ajax({
-				url: bpmSettings.ajaxUrl,
-				method: 'POST',
-				dataType: 'json',
-				data: {
-					action: 'bpm_save_settings',
-					nonce: bpmSettings.nonce,
-					unit_types: unitTypes,
-					enable_manage_stock: this.$manageStock.is(':checked') ? 1 : 0,
-					summary_email: this.$summaryEmail.val(),
-				},
-			})
-				.done((response) => {
-					if (!response || !response.success || !response.data) {
-						BPMUtils.showNotice(bpmSettings.messages.error, 'error');
-						return;
-					}
+		$.ajax({
+			url: bpmSettings.ajaxUrl,
+			method: 'POST',
+			dataType: 'text',
+			data: {
+				action: 'bpm_save_settings',
+				nonce: bpmSettings.nonce,
+				unit_types: unitTypes,
+				enable_manage_stock: this.$manageStock.is(':checked') ? 1 : 0,
+				summary_email: this.$summaryEmail.val(),
+			},
+		})
+			.done((rawResponse) => {
+				const response = BPMUtils.parseJsonResponse(rawResponse);
 
-					this.refreshForm(response.data.settings);
-					BPMUtils.showNotice(bpmSettings.messages.saved, 'success');
-				})
-				.fail(() => {
+				if (!response || !response.success || !response.data) {
 					BPMUtils.showNotice(bpmSettings.messages.error, 'error');
-				})
-				.always(() => {
-					BPMUtils.unblock(this.$form);
-				});
-		},
+					return;
+				}
+
+				this.refreshForm(response.data.settings);
+				BPMUtils.showNotice(bpmSettings.messages.saved, 'success');
+			})
+			.fail((jqXHR) => {
+				const parsed = BPMUtils.parseJsonResponse(jqXHR && jqXHR.responseText ? jqXHR.responseText : null);
+				const message = parsed && parsed.data && parsed.data.message
+					? parsed.data.message
+					: bpmSettings.messages.error;
+				BPMUtils.showNotice(message, 'error');
+			})
+			.always(() => {
+				BPMUtils.unblock(this.$form);
+			});
+	},
 
 		refreshForm(settings) {
 			if (!settings) {
@@ -89,4 +95,3 @@
 		SettingsApp.init();
 	});
 })(jQuery);
-

@@ -40,6 +40,8 @@ class BPM_Activator {
 			product_id BIGINT UNSIGNED NOT NULL,
 			quantity_produced FLOAT NOT NULL DEFAULT 0,
 			quantity_wasted FLOAT NOT NULL DEFAULT 0,
+			previous_stock FLOAT NOT NULL DEFAULT 0,
+			new_stock FLOAT NOT NULL DEFAULT 0,
 			unit_type VARCHAR(20) NOT NULL DEFAULT '',
 			note TEXT NULL,
 			created_by BIGINT UNSIGNED NOT NULL,
@@ -59,11 +61,11 @@ class BPM_Activator {
 	 * @return void
 	 */
 	private static function maybe_seed_settings() {
-			$defaults = array(
-				'unit_types'           => array( 'kg', 'litre', 'piece' ),
-				'enable_manage_stock'  => 1,
-				'summary_email'        => '',
-			);
+		$defaults = array(
+			'unit_types'           => array( 'kg', 'litre', 'piece' ),
+			'enable_manage_stock'  => 1,
+			'summary_email'        => '',
+		);
 
 		$existing = get_option( 'bpm_settings', array() );
 
@@ -74,5 +76,44 @@ class BPM_Activator {
 
 		$merged = wp_parse_args( $existing, $defaults );
 		update_option( 'bpm_settings', $merged );
+	}
+
+	/**
+	 * Ensure schema is up to date for existing installations.
+	 *
+	 * @return void
+	 */
+	public static function ensure_schema() {
+		global $wpdb;
+
+		$table_name = $wpdb->prefix . 'bakery_production_log';
+
+		if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) ) !== $table_name ) { // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			return;
+		}
+
+		self::maybe_add_column( $table_name, 'previous_stock', "ALTER TABLE {$table_name} ADD COLUMN previous_stock FLOAT NOT NULL DEFAULT 0 AFTER quantity_wasted" );
+		self::maybe_add_column( $table_name, 'new_stock', "ALTER TABLE {$table_name} ADD COLUMN new_stock FLOAT NOT NULL DEFAULT 0 AFTER previous_stock" );
+	}
+
+	/**
+	 * Conditionally add a column when missing.
+	 *
+	 * @param string $table  Table name.
+	 * @param string $column Column name to check.
+	 * @param string $sql    SQL statement to execute when missing.
+	 *
+	 * @return void
+	 */
+	private static function maybe_add_column( $table, $column, $sql ) {
+		global $wpdb;
+
+		$exists = $wpdb->get_var( $wpdb->prepare( "SHOW COLUMNS FROM {$table} LIKE %s", $column ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		if ( $exists ) {
+			return;
+		}
+
+		$wpdb->query( $sql ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 	}
 }

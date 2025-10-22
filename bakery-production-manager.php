@@ -31,6 +31,15 @@ if ( ! defined( 'BPM_PLUGIN_BASENAME' ) ) {
 	define( 'BPM_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
 }
 
+if ( ! defined( 'BPM_AJAX_BUFFER_LEVEL' ) && defined( 'DOING_AJAX' ) && DOING_AJAX ) {
+	$requested_action = isset( $_REQUEST['action'] ) ? (string) $_REQUEST['action'] : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+
+	if ( $requested_action && 0 === strpos( strtolower( $requested_action ), 'bpm_' ) ) {
+		ob_start();
+		define( 'BPM_AJAX_BUFFER_LEVEL', ob_get_level() );
+	}
+}
+
 require_once BPM_PLUGIN_DIR . 'includes/class-bpm-activator.php';
 require_once BPM_PLUGIN_DIR . 'includes/class-bpm-deactivator.php';
 require_once BPM_PLUGIN_DIR . 'includes/class-bpm-helpers.php';
@@ -151,6 +160,8 @@ final class BPM_Plugin {
 	 * @return void
 	 */
 	private function init() {
+		BPM_Activator::ensure_schema();
+
 		$this->container['helpers']    = new BPM_Helpers();
 		$this->container['admin_menu'] = new BPM_Admin_Menu();
 		$this->container['assets']     = new BPM_Assets();

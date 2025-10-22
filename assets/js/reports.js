@@ -6,6 +6,10 @@
 		return;
 	}
 
+	// Enable console debugging
+	window.bpmDebug = (typeof window.bpmDebug !== 'undefined') ? window.bpmDebug : (bpmReports && bpmReports.debug ? !!bpmReports.debug : true);
+	const _bpmLog = (...args) => { if (window.bpmDebug && window.console && console.log) { try { console.log('[BPM Reports]', ...args); } catch (e) {} } };
+
 	const ReportsApp = {
 		init() {
 			this.$container = $('.bpm-reports');
@@ -20,43 +24,80 @@
 			};
 			this.$start = $('#bpm-start-date');
 			this.$end = $('#bpm-end-date');
-			this.$product = $('#bpm-report-product');
-			this.chart = null;
+		this.$product = $('#bpm-report-product');
+		this.chart = null;
 
-			this.setupSelect2();
-			this.bindEvents();
-			this.fetchReport();
-		},
+		// Ensure dates are set even if optional libs (Select2) fail to load
+		this.ensureDefaultDates(true);
+		_bpmLog('init -> dates defaulted', this.$start.val(), this.$end.val());
+		this.setupSelect2();
+		this.bindEvents();
+		_bpmLog('init -> starting initial fetch');
+		this.fetchReport();
+	},
 
-		setupSelect2() {
-			this.$product.select2({
-				placeholder: this.$product.data('placeholder'),
-				allowClear: true,
-				width: '100%',
-				ajax: {
-					url: bpmReports.ajaxUrl,
-					dataType: 'json',
-					delay: 200,
-					data(params) {
-						return {
+	setupSelect2() {
+		_bpmLog('setupSelect2');
+		if (!this.$product || !this.$product.length) { _bpmLog('no product select found'); return; }
+
+		// Prefer Select2; fall back to WooCommerce's SelectWoo when available
+		const hasSelect2 = typeof this.$product.select2 === 'function';
+		const hasSelectWoo = typeof this.$product.selectWoo === 'function';
+		if (!hasSelect2 && !hasSelectWoo) { _bpmLog('Select2/SelectWoo not available, skipping enhancement'); return; }
+		const initFn = hasSelect2 ? 'select2' : 'selectWoo';
+
+		const $dropdownParent = this.$product.closest('.bpm-report-filters');
+		this.$product[initFn]({
+			placeholder: this.$product.data('placeholder'),
+			allowClear: true,
+			width: '100%',
+			minimumInputLength: 0,
+			dropdownParent: $dropdownParent.length ? $dropdownParent : undefined,
+			ajax: {
+				url: bpmReports.ajaxUrl,
+				dataType: 'text',
+				delay: 200,
+				data(params) {
+					return {
 							action: 'bpm_search_products',
 							nonce: bpmReports.nonce,
 							term: params.term || '',
 							page: params.page || 1,
-						};
-					},
-					processResults(response) {
-						if (response && response.success && response.data) {
-							return {
-								results: response.data.results,
-								pagination: response.data.pagination,
-							};
-						}
-						return { results: [] };
-					},
+					};
 				},
-			});
-		},
+				processResults(response) {
+					_bpmLog('select2 processResults raw', response);
+					const parsed = BPMUtils.parseJsonResponse(response);
+					_bpmLog('select2 processResults parsed', parsed);
+					if (parsed && parsed.success && parsed.data) {
+						return {
+							results: parsed.data.results,
+							pagination: parsed.data.pagination,
+						};
+					}
+					return { results: [] };
+				},
+				cache: true,
+			},
+		});
+
+		this.$product.on('select2:open', () => {
+			const $searchField = $('.select2-container--open .select2-search__field');
+			if ($searchField.length) {
+				if (!$searchField.data('bpm-initialised')) {
+					$searchField.data('bpm-initialised', true);
+					setTimeout(() => {
+						const original = $searchField.val();
+						if (!original) {
+							$searchField.val(' ');
+							$searchField.trigger('input');
+							$searchField.val('');
+						}
+					}, 0);
+				}
+			}
+		});
+	},
 
 		bindEvents() {
 			$('#bpm-run-report').on('click', () => this.fetchReport());
@@ -64,33 +105,56 @@
 			$('#bpm-export-csv').on('click', () => this.exportCsv());
 		},
 
-		getFilters() {
-			return {
-				start_date: this.$start.val(),
-				end_date: this.$end.val(),
-				product_id: this.$product.val() || '',
-			};
-		},
+	getFilters() {
+		this.ensureDefaultDates();
+		const startDate = this.$start.val();
+		let endDate = this.$end.val();
+		if (startDate && endDate && startDate > endDate) {
+			endDate = startDate;
+			this.$end.val(endDate);
+		}
+		const f = {
+			start_date: startDate,
+			end_date: endDate,
+			product_id: this.$product.val() || '',
+		};
+		_bpmLog('getFilters', f);
+		return f;
+	},
 
-		fetchReport() {
-			const filters = this.getFilters();
+	fetchReport() {
+		const filters = this.getFilters();
 
-			BPMUtils.block(this.$container);
+		if (!filters.start_date) {
+			this.renderEmpty(bpmReports.messages.startRequired);
+			BPMUtils.showNotice(bpmReports.messages.startRequired, 'warning');
+			return;
+		}
+
+		BPMUtils.block(this.$container);
+		_bpmLog('fetchReport -> ajax start', filters);
 
 			$.ajax({
 				url: bpmReports.ajaxUrl,
 				method: 'POST',
-				dataType: 'json',
+				dataType: 'text',
 				data: {
 					action: 'bpm_get_report_data',
 					nonce: bpmReports.nonce,
 					...filters,
 				},
 			})
-				.done((response) => {
+				.done((rawResponse) => {
+					_bpmLog('fetchReport -> ajax done, raw length', rawResponse && rawResponse.length);
+					const response = BPMUtils.parseJsonResponse(rawResponse);
+					_bpmLog('fetchReport -> parsed', response);
+
 					if (!response || !response.success || !response.data) {
-						this.renderEmpty();
-						BPMUtils.showNotice(bpmReports.messages.noData, 'warning');
+						const message = response && response.data && response.data.message
+							? response.data.message
+							: bpmReports.messages.noData;
+						this.renderEmpty(message);
+						BPMUtils.showNotice(message, 'warning');
 						return;
 					}
 
@@ -99,21 +163,28 @@
 					this.renderTotals(response.data.totals || {});
 					this.renderChart(response.data.chart || {});
 				})
-				.fail(() => {
-					this.renderEmpty();
-					BPMUtils.showNotice(bpmReports.messages.noData, 'error');
+				.fail((jqXHR) => {
+					_bpmLog('fetchReport -> ajax fail', jqXHR && jqXHR.status, jqXHR && jqXHR.responseText && jqXHR.responseText.slice(0, 200));
+					const parsed = BPMUtils.parseJsonResponse(jqXHR && jqXHR.responseText ? jqXHR.responseText : null);
+					const message = parsed && parsed.data && parsed.data.message
+						? parsed.data.message
+						: bpmReports.messages.noData;
+					this.renderEmpty(message);
+					BPMUtils.showNotice(message, 'error');
 				})
 				.always(() => {
+					_bpmLog('fetchReport -> ajax always');
 					BPMUtils.unblock(this.$container);
 				});
 		},
 
-		renderEmpty() {
-			const emptyMessage = (bpmReports.labels && bpmReports.labels.noData) || 'No data available.';
-			this.$tableBody.html(`<tr class="no-results"><td colspan="7">${emptyMessage}</td></tr>`);
-			this.renderTotals({});
-			this.renderChart({});
-		},
+	renderEmpty(message) {
+		const fallback = (bpmReports.labels && bpmReports.labels.noData) || 'No data available.';
+		const output = message || fallback;
+		this.$tableBody.html(`<tr class="no-results"><td colspan="7">${output}</td></tr>`);
+		this.renderTotals({});
+		this.renderChart({});
+	},
 
 		applyFilters(filters) {
 			if (filters.start_date) {
@@ -140,9 +211,10 @@
 		},
 
 		renderTable(rows) {
+			_bpmLog('renderTable rows', Array.isArray(rows) ? rows.length : 0);
 			if (!rows.length) {
 				const emptyMessage = (bpmReports.labels && bpmReports.labels.noData) || 'No data available.';
-				this.$tableBody.html(`<tr class="no-results"><td colspan="7">${emptyMessage}</td></tr>`);
+				this.renderEmpty(emptyMessage);
 				return;
 			}
 
@@ -169,6 +241,7 @@
 		},
 
 		renderTotals(totals) {
+			_bpmLog('renderTotals', totals);
 			this.$totals.produced.text(BPMUtils.formatNumber(totals.produced || 0));
 			this.$totals.wasted.text(BPMUtils.formatNumber(totals.wasted || 0));
 			this.$totals.net.text(BPMUtils.formatNumber(totals.net_added || 0));
@@ -178,6 +251,7 @@
 		},
 
 		renderChart(chartData) {
+			_bpmLog('renderChart labels', chartData && chartData.labels ? chartData.labels.length : 0);
 			const ctx = document.getElementById('bpm-report-chart').getContext('2d');
 
 			if (this.chart) {
@@ -188,6 +262,9 @@
 				ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 				return;
 			}
+
+			// If Chart.js failed to load (offline), skip rendering gracefully
+			if (typeof window.Chart === 'undefined') { _bpmLog('Chart.js missing, skip render'); return; }
 
 			const labels = bpmReports.labels || {};
 			this.chart = new window.Chart(ctx, {
@@ -227,28 +304,42 @@
 		exportCsv() {
 			const filters = this.getFilters();
 
+			if (!filters.start_date) {
+				BPMUtils.showNotice(bpmReports.messages.startRequired, 'warning');
+				return;
+			}
+
 			BPMUtils.block(this.$container);
 
 			$.ajax({
 				url: bpmReports.ajaxUrl,
 				method: 'POST',
-				dataType: 'json',
+				dataType: 'text',
 				data: {
 					action: 'bpm_export_csv',
 					nonce: bpmReports.nonce,
 					...filters,
 				},
 			})
-				.done((response) => {
+				.done((rawResponse) => {
+					const response = BPMUtils.parseJsonResponse(rawResponse);
+
 					if (!response || !response.success || !response.data) {
-						BPMUtils.showNotice(bpmReports.messages.csvError, 'error');
+						const message = response && response.data && response.data.message
+							? response.data.message
+							: bpmReports.messages.csvError;
+						BPMUtils.showNotice(message, 'error');
 						return;
 					}
 
 					this.downloadCsv(response.data);
 				})
-				.fail(() => {
-					BPMUtils.showNotice(bpmReports.messages.csvError, 'error');
+				.fail((jqXHR) => {
+					const parsed = BPMUtils.parseJsonResponse(jqXHR && jqXHR.responseText ? jqXHR.responseText : null);
+					const message = parsed && parsed.data && parsed.data.message
+						? parsed.data.message
+						: bpmReports.messages.csvError;
+					BPMUtils.showNotice(message, 'error');
 				})
 				.always(() => {
 					BPMUtils.unblock(this.$container);
@@ -275,6 +366,28 @@
 			link.click();
 			document.body.removeChild(link);
 			URL.revokeObjectURL(url);
+		},
+
+		ensureDefaultDates(force = false) {
+			const todayObj = new Date();
+			const startObj = new Date(todayObj);
+			startObj.setDate(startObj.getDate() - 6);
+			const startDefault = this.formatDate(startObj);
+			const endDefault = this.formatDate(todayObj);
+
+			if (force || !this.$start.val()) {
+				this.$start.val(startDefault);
+			}
+			if (force || !this.$end.val()) {
+				this.$end.val(endDefault);
+			}
+		},
+
+		formatDate(date) {
+			const year = date.getFullYear();
+			const month = `${date.getMonth() + 1}`.padStart(2, '0');
+			const day = `${date.getDate()}`.padStart(2, '0');
+			return `${year}-${month}-${day}`;
 		},
 	};
 

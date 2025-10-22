@@ -81,3 +81,80 @@ if ( ! defined( 'ABSPATH' ) ) {
 	</div>
 </div>
 
+<script>
+  // Minimal inline ping so we know the view loaded
+  window.bpmDebug = true;
+  try { console.log('[BPM Reports] view template loaded'); } catch (e) {}
+
+  // Fallback loader: if the main scripts weren't enqueued, inject them dynamically
+  (function() {
+    try {
+      // Provide a minimal bpmReports config if it's missing
+      if (typeof window.bpmReports === 'undefined') {
+        window.bpmReports = {
+          ajaxUrl: '<?php echo esc_js( admin_url( 'admin-ajax.php' ) ); ?>',
+          nonce: '<?php echo esc_js( wp_create_nonce( 'bpm_ajax_nonce' ) ); ?>',
+          debug: true,
+          messages: {
+            noData: '<?php echo esc_js( __( 'No data found for the selected filters.', 'bakery-production-manager' ) ); ?>',
+            csvError: '<?php echo esc_js( __( 'Unable to export CSV at this time.', 'bakery-production-manager' ) ); ?>',
+            startRequired: '<?php echo esc_js( __( 'Please select a start date before running the report.', 'bakery-production-manager' ) ); ?>',
+          },
+          labels: {
+            produced: '<?php echo esc_js( __( 'Produced', 'bakery-production-manager' ) ); ?>',
+            wasted: '<?php echo esc_js( __( 'Wasted', 'bakery-production-manager' ) ); ?>',
+            sold: '<?php echo esc_js( __( 'Sold', 'bakery-production-manager' ) ); ?>',
+            oversold: '<?php echo esc_js( __( 'Oversold vs Produced', 'bakery-production-manager' ) ); ?>',
+            noData: '<?php echo esc_js( __( 'No data available.', 'bakery-production-manager' ) ); ?>',
+          }
+        };
+        console.log('[BPM Reports] injected bpmReports config');
+      }
+
+      function injectScript(src, onload) {
+        var el = document.createElement('script');
+        el.src = src;
+        el.async = false;
+        if (onload) { el.onload = onload; }
+        document.body.appendChild(el);
+      }
+
+      function injectStyle(href) {
+        var el = document.createElement('link');
+        el.rel = 'stylesheet';
+        el.href = href;
+        document.head.appendChild(el);
+      }
+
+      if (typeof window.BPMUtils === 'undefined') {
+        injectScript('<?php echo esc_js( BPM_PLUGIN_URL . 'assets/js/bpm-utils.js' ); ?>', function(){ console.log('[BPM Reports] utils loaded'); });
+      }
+      // If neither Select2 nor SelectWoo is present, try loading WooCommerce's SelectWoo locally (preferred), otherwise CDN Select2
+      var hasSelect2 = !!(jQuery && jQuery.fn && jQuery.fn.select2);
+      var hasSelectWoo = !!(jQuery && jQuery.fn && jQuery.fn.selectWoo);
+      if (!hasSelect2 && !hasSelectWoo) {
+        console.log('[BPM Reports] enhancing select: loading SelectWoo');
+        <?php if ( defined( 'WC_PLUGIN_FILE' ) ) :
+          $selectwoo_js  = plugins_url( 'assets/js/selectWoo/selectWoo.full.min.js', WC_PLUGIN_FILE );
+          $selectwoo_css = plugins_url( 'assets/css/select2.css', WC_PLUGIN_FILE );
+        ?>
+        injectStyle('<?php echo esc_js( $selectwoo_css ); ?>');
+        injectScript('<?php echo esc_js( $selectwoo_js ); ?>', function(){ console.log('[BPM Reports] SelectWoo loaded'); });
+        <?php else : ?>
+        // Fallback to CDN Select2 if WooCommerce path is unavailable
+        injectStyle('https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css');
+        injectScript('https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js', function(){ console.log('[BPM Reports] Select2 CDN loaded'); });
+        <?php endif; ?>
+      }
+      // Load reports logic if it wasn't enqueued for any reason
+      var hasReports = false;
+      var scripts = document.getElementsByTagName('script');
+      for (var i = 0; i < scripts.length; i++) { if (scripts[i].src && scripts[i].src.indexOf('assets/js/reports.js') !== -1) { hasReports = true; break; } }
+      if (!hasReports) {
+        injectScript('<?php echo esc_js( BPM_PLUGIN_URL . 'assets/js/reports.js' ); ?>', function(){ console.log('[BPM Reports] reports loaded'); });
+      }
+    } catch (e) {
+      try { console.error('[BPM Reports] fallback injection error', e); } catch (ie) {}
+    }
+  })();
+</script>

@@ -126,6 +126,14 @@ class BPM_Reports {
 			$rows[] = $data;
 		}
 
+		// Sort rows alphabetically for consistent presentation.
+		usort(
+			$rows,
+			static function( $a, $b ) {
+				return strcasecmp( $a['product_name'], $b['product_name'] );
+			}
+		);
+
 		$chart = array(
 			'labels'   => array_map(
 				static function( $item ) {
@@ -189,6 +197,40 @@ class BPM_Reports {
 	private function get_sales_data( $range, $product_id = 0 ) {
 		global $wpdb;
 
+		$lookup_table = $wpdb->prefix . 'wc_order_product_lookup';
+		$stats_table  = $wpdb->prefix . 'wc_order_stats';
+
+		$table_exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $lookup_table ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+
+		if ( $table_exists ) {
+			$sql = "
+				SELECT
+					COALESCE(NULLIF(wcopl.variation_id, 0), wcopl.product_id) AS product_id,
+					SUM(wcopl.product_qty) AS qty_sold
+				FROM {$lookup_table} AS wcopl
+				INNER JOIN {$stats_table} AS wcos ON wcopl.order_id = wcos.order_id
+				WHERE wcos.status IN ( 'wc-processing', 'wc-completed' )
+					AND wcos.date_created >= %s
+					AND wcos.date_created <= %s
+			";
+
+			$params = array(
+				$range['start'],
+				$range['end'],
+			);
+
+			if ( $product_id ) {
+				$sql      .= ' AND ( wcopl.product_id = %d OR wcopl.variation_id = %d )';
+				$params[] = $product_id;
+				$params[] = $product_id;
+			}
+
+			$sql .= ' GROUP BY product_id';
+
+			return $wpdb->get_results( $wpdb->prepare( $sql, $params ), ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		}
+
+		// Fallback for WooCommerce installs missing the lookup table.
 		$order_items      = $wpdb->prefix . 'woocommerce_order_items';
 		$order_item_meta  = $wpdb->prefix . 'woocommerce_order_itemmeta';
 		$posts_table      = $wpdb->posts;
@@ -209,6 +251,7 @@ class BPM_Reports {
 				LEFT JOIN {$order_item_meta} AS variation_meta ON oi.order_item_id = variation_meta.order_item_id AND variation_meta.meta_key = '_variation_id'
 				INNER JOIN {$order_item_meta} AS qty_meta ON oi.order_item_id = qty_meta.order_item_id AND qty_meta.meta_key = '_qty'
 			WHERE p.post_type = 'shop_order'
+				AND oi.order_item_type = 'line_item'
 				AND p.post_status IN ( 'wc-processing', 'wc-completed' )
 				AND p.post_date >= %s
 				AND p.post_date <= %s
@@ -220,7 +263,7 @@ class BPM_Reports {
 		);
 
 		if ( $product_id ) {
-			$sql    .= ' AND ( CAST(variation_meta.meta_value AS UNSIGNED) = %d OR CAST(product_meta.meta_value AS UNSIGNED) = %d )';
+			$sql      .= ' AND ( CAST(variation_meta.meta_value AS UNSIGNED) = %d OR CAST(product_meta.meta_value AS UNSIGNED) = %d )';
 			$params[] = $product_id;
 			$params[] = $product_id;
 		}

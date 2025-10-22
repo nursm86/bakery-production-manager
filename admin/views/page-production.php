@@ -16,6 +16,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 		<p class="description"><?php esc_html_e( 'Record today’s production, waste, and automatically update WooCommerce stock. Add as many products as needed without reloading the page.', 'bakery-production-manager' ); ?></p>
 
 		<form id="bpm-production-form">
+			<div class="bpm-production-meta">
+				<label for="bpm-production-date">
+					<span><?php esc_html_e( 'Production date & time', 'bakery-production-manager' ); ?></span>
+					<input type="datetime-local" id="bpm-production-date" />
+				</label>
+				<p class="description"><?php esc_html_e( 'Backdate entries by choosing a different date. Defaults to now.', 'bakery-production-manager' ); ?></p>
+			</div>
+
 			<div id="bpm-production-rows" class="bpm-production-rows" aria-live="polite"></div>
 
 			<div class="bpm-actions">
@@ -35,7 +43,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	<div class="bpm-summary-card">
 		<h2><?php esc_html_e( 'Latest Submission Summary', 'bakery-production-manager' ); ?></h2>
 		<div class="bpm-summary-content" id="bpm-production-summary">
-			<p class="description"><?php esc_html_e( 'Submit production entries to see a live summary including updated stock levels.', 'bakery-production-manager' ); ?></p>
+			<p class="description"><?php esc_html_e( 'Most recent production logs appear here, including stock adjustments.', 'bakery-production-manager' ); ?></p>
 		</div>
 	</div>
 </div>
@@ -99,4 +107,3 @@ if ( ! defined( 'ABSPATH' ) ) {
 		</div>
 	</div>
 </script>
-

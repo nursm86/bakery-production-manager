@@ -7,18 +7,21 @@
 	}
 
 	const ProductionApp = {
-		init() {
-			this.$form = $('#bpm-production-form');
-			this.$rowsContainer = $('#bpm-production-rows');
-			this.$summary = $('#bpm-production-summary');
-			this.template = $('#bpm-row-template').html();
-			this.rowIndex = 0;
+	init() {
+		this.$form = $('#bpm-production-form');
+		this.$rowsContainer = $('#bpm-production-rows');
+		this.$summary = $('#bpm-production-summary');
+		this.$dateInput = $('#bpm-production-date');
+		this.template = $('#bpm-row-template').html();
+		this.rowIndex = 0;
 
-			this.bindEvents();
-			this.addRow();
-		},
+		this.setupDateField();
+		this.bindEvents();
+		this.addRow();
+		this.fetchLatestSummary();
+	},
 
-		bindEvents() {
+	bindEvents() {
 			this.$form.on('click', '.bpm-add-row', (event) => {
 				event.preventDefault();
 				this.addRow();
@@ -38,8 +41,24 @@
 			this.$form.on('input change', '.bpm-input-produced, .bpm-input-wasted', (event) => {
 				const $row = $(event.currentTarget).closest('.bpm-row');
 				this.updateTotals($row);
-			});
-		},
+		});
+	},
+
+	setupDateField() {
+		if (!this.$dateInput.length) {
+			return;
+		}
+
+		if (!this.$dateInput.val()) {
+			this.$dateInput.val(this.getCurrentDateTimeLocal());
+		}
+	},
+
+	getCurrentDateTimeLocal() {
+		const now = new Date();
+		now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+		return now.toISOString().slice(0, 16);
+	},
 
 		addRow() {
 			this.rowIndex += 1;
@@ -58,10 +77,19 @@
 			const $productSelect = $row.find('.bpm-product-select');
 			const $unitSelect = $row.find('.bpm-unit-select');
 
-			$productSelect.select2({
+			// Prefer Select2, fall back to WooCommerce's SelectWoo if available
+			const hasSelect2 = typeof $productSelect.select2 === 'function';
+			const hasSelectWoo = typeof $productSelect.selectWoo === 'function';
+			const initFn = hasSelect2 ? 'select2' : (hasSelectWoo ? 'selectWoo' : null);
+			if (!initFn) {
+				// No enhancer; keep native select
+				return;
+			}
+
+			$productSelect[initFn]({
 				ajax: {
 					url: bpmProduction.ajaxUrl,
-					dataType: 'json',
+					dataType: 'text',
 					delay: 200,
 					data(params) {
 						return {
@@ -71,7 +99,9 @@
 							page: params.page || 1,
 						};
 					},
-					processResults(response) {
+					processResults(rawResponse) {
+						const response = BPMUtils.parseJsonResponse(rawResponse);
+
 						if (response && response.success && response.data) {
 							return {
 								results: response.data.results,
@@ -99,7 +129,16 @@
 			});
 
 			this.populateUnits($unitSelect);
-			$unitSelect.select2({
+			const unitHasSelect2 = typeof $unitSelect.select2 === 'function';
+			const unitHasSelectWoo = typeof $unitSelect.selectWoo === 'function';
+			const unitInitFn = unitHasSelect2 ? 'select2' : (unitHasSelectWoo ? 'selectWoo' : null);
+			if (unitInitFn) {
+				$unitSelect[unitInitFn]({
+					tags: true,
+					width: '100%',
+					placeholder: bpmProduction.unitTypes.length ? bpmProduction.unitTypes[0] : 'unit',
+				});
+			}
 				tags: true,
 				width: '100%',
 				placeholder: bpmProduction.unitTypes.length ? bpmProduction.unitTypes[0] : 'unit',
@@ -121,10 +160,10 @@
 			}
 		},
 
-		fetchProductStock($row, productId) {
-			if (!productId) {
-				return;
-			}
+	fetchProductStock($row, productId) {
+		if (!productId) {
+			return;
+		}
 
 			const $status = $row.find('.bpm-stock-badge');
 			$status.text('Fetching stock…');
@@ -132,14 +171,16 @@
 			$.ajax({
 				url: bpmProduction.ajaxUrl,
 				method: 'POST',
-				dataType: 'json',
+				dataType: 'text',
 				data: {
 					action: 'bpm_get_product_stock',
 					nonce: bpmProduction.nonce,
 					product_id: productId,
 				},
 			})
-				.done((response) => {
+				.done((rawResponse) => {
+					const response = BPMUtils.parseJsonResponse(rawResponse);
+
 					if (!response || !response.success || !response.data) {
 						this.resetStockMeta($row);
 						return;
@@ -151,11 +192,46 @@
 					$status.text(response.data.product_name || '');
 					this.updateTotals($row);
 				})
-				.fail(() => {
+				.fail((jqXHR) => {
 					this.resetStockMeta($row);
-					BPMUtils.showNotice(bpmProduction.messages.error, 'error');
-				});
-		},
+					const parsed = BPMUtils.parseJsonResponse(jqXHR && jqXHR.responseText ? jqXHR.responseText : null);
+			const message = parsed && parsed.data && parsed.data.message
+				? parsed.data.message
+				: bpmProduction.messages.error;
+			BPMUtils.showNotice(message, 'error');
+			});
+	},
+
+	fetchLatestSummary() {
+		$.ajax({
+			url: bpmProduction.ajaxUrl,
+			method: 'POST',
+			dataType: 'text',
+			data: {
+				action: 'bpm_get_latest_summary',
+				nonce: bpmProduction.nonce,
+			},
+		})
+			.done((rawResponse) => {
+				const response = BPMUtils.parseJsonResponse(rawResponse);
+
+				if (!response || !response.success || !response.data) {
+					return;
+				}
+
+				this.renderSummary(response.data);
+			})
+			.fail((jqXHR) => {
+				const parsed = BPMUtils.parseJsonResponse(jqXHR && jqXHR.responseText ? jqXHR.responseText : null);
+				const message = parsed && parsed.data && parsed.data.message
+					? parsed.data.message
+					: null;
+				if (message) {
+					BPMUtils.showNotice(message, 'error');
+				}
+				// Otherwise leave summary untouched on failure.
+			});
+	},
 
 		updateTotals($row) {
 			const produced = parseFloat($row.find('.bpm-input-produced').val()) || 0;
@@ -248,6 +324,7 @@
 
 		save() {
 			const { entries, isValid } = this.getEntries();
+			const productionDate = this.$dateInput.length ? this.$dateInput.val() : '';
 
 			if (!entries.length) {
 				BPMUtils.showNotice(bpmProduction.messages.noEntries, 'warning');
@@ -259,19 +336,27 @@
 				return;
 			}
 
+			if (this.$dateInput.length && !productionDate) {
+				BPMUtils.showNotice(bpmProduction.messages.productionDateRequired || bpmProduction.messages.validation, 'warning');
+				return;
+			}
+
 			BPMUtils.block(this.$rowsContainer);
 
 			$.ajax({
 				url: bpmProduction.ajaxUrl,
 				method: 'POST',
-				dataType: 'json',
+				dataType: 'text',
 				data: {
 					action: 'bpm_save_production_entries',
 					nonce: bpmProduction.nonce,
 					entries: JSON.stringify(entries),
+					production_date: productionDate,
 				},
 			})
-				.done((response) => {
+				.done((rawResponse) => {
+					const response = BPMUtils.parseJsonResponse(rawResponse);
+
 					if (!response || !response.success || !response.data) {
 						BPMUtils.showNotice(bpmProduction.messages.error, 'error');
 						return;
@@ -281,8 +366,12 @@
 					BPMUtils.showNotice(bpmProduction.messages.saved, 'success');
 					this.resetForm();
 				})
-				.fail(() => {
-					BPMUtils.showNotice(bpmProduction.messages.error, 'error');
+				.fail((jqXHR) => {
+					const parsed = BPMUtils.parseJsonResponse(jqXHR && jqXHR.responseText ? jqXHR.responseText : null);
+					const message = parsed && parsed.data && parsed.data.message
+						? parsed.data.message
+						: bpmProduction.messages.error;
+					BPMUtils.showNotice(message, 'error');
 				})
 				.always(() => {
 					BPMUtils.unblock(this.$rowsContainer);
@@ -291,7 +380,10 @@
 
 		renderSummary(data) {
 			if (!data || !Array.isArray(data.rows) || !data.rows.length) {
-				this.$summary.html(`<p class="description">${bpmProduction.messages.noEntries}</p>`);
+				const message = data && data.hasHistory === false
+					? bpmProduction.messages.noHistory
+					: bpmProduction.messages.noEntries;
+				this.$summary.html(`<p class="description">${message}</p>`);
 				return;
 			}
 
@@ -318,6 +410,10 @@
 			}
 
 			const labels = bpmProduction.labels || {};
+			const submittedBy = data.created_by && data.timestamp
+				? `#${data.created_by} · ${data.timestamp}`
+				: (data.timestamp || '—');
+
 			summary.append(`
 				<div class="bpm-summary-row">
 					<strong>${labels.totalProduced || 'Total Produced'}</strong>
@@ -329,18 +425,21 @@
 				</div>
 				<div class="bpm-summary-row">
 					<strong>${labels.submittedBy || 'Submitted by'}</strong>
-					<span>#${data.created_by} · ${data.timestamp}</span>
+					<span>${submittedBy}</span>
 				</div>
 			`);
 
 			this.$summary.html(summary);
 		},
 
-		resetForm() {
-			this.$rowsContainer.empty();
-			this.rowIndex = 0;
-			this.addRow();
-		},
+	resetForm() {
+		this.$rowsContainer.empty();
+		this.rowIndex = 0;
+		this.addRow();
+		if (this.$dateInput.length) {
+			this.$dateInput.val(this.getCurrentDateTimeLocal());
+		}
+	},
 	};
 
 	$(document).ready(() => {

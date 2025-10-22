@@ -24,6 +24,7 @@ class BPM_Ajax {
 		add_action( 'wp_ajax_bpm_get_report_data', array( $this, 'get_report_data' ) );
 		add_action( 'wp_ajax_bpm_export_csv', array( $this, 'export_csv' ) );
 		add_action( 'wp_ajax_bpm_save_settings', array( $this, 'save_settings' ) );
+		add_action( 'wp_ajax_bpm_get_latest_summary', array( $this, 'get_latest_summary' ) );
 	}
 
 	/**
@@ -35,13 +36,39 @@ class BPM_Ajax {
 		check_ajax_referer( 'bpm_ajax_nonce', 'nonce' );
 
 		if ( ! BPM_Helpers::current_user_can_manage() ) {
-			wp_send_json_error(
+			$this->send_error(
 				array(
 					'message' => __( 'You do not have permission to perform this action.', 'bakery-production-manager' ),
 				),
 				403
 			);
 		}
+	}
+
+	/**
+	 * Send a JSON error response ensuring buffered output is discarded first.
+	 *
+	 * @param array $data        Payload.
+	 * @param int   $status_code HTTP status.
+	 *
+	 * @return void
+	 */
+	private function send_error( $data, $status_code = 400 ) {
+		BPM_Helpers::clean_ajax_output_buffer();
+		wp_send_json_error( $data, $status_code );
+	}
+
+	/**
+	 * Send a JSON success response ensuring buffered output is discarded first.
+	 *
+	 * @param mixed $data        Payload.
+	 * @param int   $status_code HTTP status.
+	 *
+	 * @return void
+	 */
+	private function send_success( $data, $status_code = 200 ) {
+		BPM_Helpers::clean_ajax_output_buffer();
+		wp_send_json_success( $data, $status_code );
 	}
 
 	/**
@@ -137,7 +164,7 @@ class BPM_Ajax {
 			);
 		}
 
-		wp_send_json_success(
+		$this->send_success(
 			array(
 				'results'    => $results,
 				'pagination' => array(
@@ -158,7 +185,7 @@ class BPM_Ajax {
 		$product_id = isset( $_POST['product_id'] ) ? absint( $_POST['product_id'] ) : 0;
 
 		if ( ! $product_id ) {
-			wp_send_json_error(
+			$this->send_error(
 				array(
 					'message' => __( 'Invalid product.', 'bakery-production-manager' ),
 				),
@@ -169,7 +196,7 @@ class BPM_Ajax {
 		$product = wc_get_product( $product_id );
 
 		if ( ! $product ) {
-			wp_send_json_error(
+			$this->send_error(
 				array(
 					'message' => __( 'Product not found.', 'bakery-production-manager' ),
 				),
@@ -180,7 +207,7 @@ class BPM_Ajax {
 		$stock        = $product->get_stock_quantity();
 		$manage_stock = $product->get_manage_stock();
 
-		wp_send_json_success(
+		$this->send_success(
 			array(
 				'product_id'    => $product_id,
 				'stock'         => is_null( $stock ) ? 0 : (float) $stock,
@@ -210,7 +237,7 @@ class BPM_Ajax {
 		}
 
 		if ( empty( $raw_entries ) || ! is_array( $raw_entries ) ) {
-			wp_send_json_error(
+			$this->send_error(
 				array(
 					'message' => __( 'No production entries received.', 'bakery-production-manager' ),
 				),
@@ -219,7 +246,8 @@ class BPM_Ajax {
 		}
 
 		$current_user_id = get_current_user_id();
-		$timestamp       = current_time( 'mysql' );
+		$production_date = isset( $_POST['production_date'] ) ? sanitize_text_field( wp_unslash( $_POST['production_date'] ) ) : '';
+		$timestamp       = BPM_Helpers::normalize_datetime( $production_date );
 		$table_name      = $wpdb->prefix . 'bakery_production_log';
 
 		$helpers  = bpm( 'helpers' );
@@ -279,6 +307,8 @@ class BPM_Ajax {
 					'product_id'        => $product_id,
 					'quantity_produced' => $quantity_produced,
 					'quantity_wasted'   => $quantity_wasted,
+					'previous_stock'    => $previous_stock,
+					'new_stock'         => $new_stock,
 					'unit_type'         => $unit_type,
 					'note'              => $note,
 					'created_by'        => $current_user_id,
@@ -286,6 +316,8 @@ class BPM_Ajax {
 				),
 				array(
 					'%d',
+					'%f',
+					'%f',
 					'%f',
 					'%f',
 					'%s',
@@ -309,7 +341,7 @@ class BPM_Ajax {
 		}
 
 		if ( ! empty( $errors ) && empty( $response_rows ) ) {
-			wp_send_json_error(
+			$this->send_error(
 				array(
 					'message' => implode( ' ', $errors ),
 				),
@@ -317,7 +349,7 @@ class BPM_Ajax {
 			);
 		}
 
-		wp_send_json_success(
+		$this->send_success(
 			array(
 				'rows'          => $response_rows,
 				'totalProduced' => $total_produced,
@@ -325,6 +357,7 @@ class BPM_Ajax {
 				'warnings'      => $errors,
 				'timestamp'     => $timestamp,
 				'created_by'    => $current_user_id,
+				'hasHistory'    => true,
 			)
 		);
 	}
@@ -343,10 +376,19 @@ class BPM_Ajax {
 			'product_id' => isset( $_POST['product_id'] ) ? absint( $_POST['product_id'] ) : 0,
 		);
 
+		if ( empty( $args['start_date'] ) ) {
+			$this->send_error(
+				array(
+					'message' => __( 'Please provide a start date.', 'bakery-production-manager' ),
+				),
+				400
+			);
+		}
+
 		$reports = bpm( 'reports' );
 
 		if ( ! $reports ) {
-			wp_send_json_error(
+			$this->send_error(
 				array(
 					'message' => __( 'Reports module unavailable.', 'bakery-production-manager' ),
 				),
@@ -356,7 +398,7 @@ class BPM_Ajax {
 
 		$data = $reports->get_report( $args );
 
-		wp_send_json_success( $data );
+		$this->send_success( $data );
 	}
 
 	/**
@@ -373,10 +415,19 @@ class BPM_Ajax {
 			'product_id' => isset( $_POST['product_id'] ) ? absint( $_POST['product_id'] ) : 0,
 		);
 
+		if ( empty( $args['start_date'] ) ) {
+			$this->send_error(
+				array(
+					'message' => __( 'Please provide a start date.', 'bakery-production-manager' ),
+				),
+				400
+			);
+		}
+
 		$reports = bpm( 'reports' );
 
 		if ( ! $reports ) {
-			wp_send_json_error(
+			$this->send_error(
 				array(
 					'message' => __( 'Reports module unavailable.', 'bakery-production-manager' ),
 				),
@@ -387,13 +438,99 @@ class BPM_Ajax {
 		$data = $reports->get_report( $args );
 		$csv  = $reports->generate_csv( $data, $args );
 
-		wp_send_json_success(
+		$this->send_success(
 			array(
 				'filename' => sprintf(
 					'bakery-production-report-%s.csv',
 					gmdate( 'Ymd-His' )
 				),
 				'content'  => base64_encode( $csv ),
+			)
+		);
+	}
+
+	/**
+	 * AJAX: Fetch the latest production summary.
+	 *
+	 * @return void
+	 */
+	public function get_latest_summary() {
+		global $wpdb;
+
+		$this->verify_request();
+
+		$table_name = $wpdb->prefix . 'bakery_production_log';
+
+		$latest = $wpdb->get_row( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			"SELECT created_at, created_by FROM {$table_name} ORDER BY created_at DESC, id DESC LIMIT 1",
+			ARRAY_A
+		);
+
+		if ( ! $latest ) {
+			$this->send_success(
+				array(
+					'rows'          => array(),
+					'totalProduced' => 0,
+					'totalWasted'   => 0,
+					'warnings'      => array(),
+					'timestamp'     => '',
+					'created_by'    => 0,
+					'hasHistory'    => false,
+				)
+			);
+		}
+
+		$entries = $wpdb->get_results( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$wpdb->prepare(
+				"SELECT * FROM {$table_name} WHERE created_at = %s ORDER BY id ASC",
+				$latest['created_at']
+			),
+			ARRAY_A
+		);
+
+		$response_rows  = array();
+		$total_produced = 0;
+		$total_wasted   = 0;
+		$warnings       = array();
+
+		foreach ( (array) $entries as $entry ) {
+			$product      = wc_get_product( (int) $entry['product_id'] );
+			$product_name = $product ? $product->get_formatted_name() : sprintf(
+				/* translators: %d product ID. */
+				__( 'Deleted Product #%d', 'bakery-production-manager' ),
+				$entry['product_id']
+			);
+
+			if ( ! $product ) {
+				$warnings[] = sprintf(
+					/* translators: %d product ID. */
+					__( 'Product with ID %d is no longer available.', 'bakery-production-manager' ),
+					$entry['product_id']
+				);
+			}
+
+			$response_rows[] = array(
+				'product_id'     => (int) $entry['product_id'],
+				'product_name'   => $product_name,
+				'previous_stock' => (float) $entry['previous_stock'],
+				'produced'       => (float) $entry['quantity_produced'],
+				'wasted'         => (float) $entry['quantity_wasted'],
+				'new_stock'      => (float) $entry['new_stock'],
+			);
+
+			$total_produced += (float) $entry['quantity_produced'];
+			$total_wasted   += (float) $entry['quantity_wasted'];
+		}
+
+		$this->send_success(
+			array(
+				'rows'          => $response_rows,
+				'totalProduced' => $total_produced,
+				'totalWasted'   => $total_wasted,
+				'warnings'      => $warnings,
+				'timestamp'     => $latest['created_at'],
+				'created_by'    => (int) $latest['created_by'],
+				'hasHistory'    => ! empty( $response_rows ),
 			)
 		);
 	}
@@ -413,7 +550,7 @@ class BPM_Ajax {
 		$helpers = bpm( 'helpers' );
 
 		if ( ! $helpers ) {
-			wp_send_json_error(
+			$this->send_error(
 				array(
 					'message' => __( 'Settings helper unavailable.', 'bakery-production-manager' ),
 				),
@@ -429,7 +566,7 @@ class BPM_Ajax {
 			)
 		);
 
-		wp_send_json_success(
+		$this->send_success(
 			array(
 				'settings' => $helpers->get_settings(),
 			)

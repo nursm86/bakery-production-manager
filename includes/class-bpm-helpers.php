@@ -165,5 +165,49 @@ class BPM_Helpers {
 			'end'   => $end_dt->format( 'Y-m-d 23:59:59' ),
 		);
 	}
-}
 
+	/**
+	 * Drop any buffered output captured during AJAX calls so JSON responses stay valid.
+	 *
+	 * @return void
+	 */
+	public static function clean_ajax_output_buffer() {
+		if ( ! defined( 'BPM_AJAX_BUFFER_LEVEL' ) ) {
+			return;
+		}
+
+		while ( ob_get_level() >= BPM_AJAX_BUFFER_LEVEL ) {
+			ob_end_clean();
+		}
+	}
+
+	/**
+	 * Normalise a provided datetime-local string into MySQL format.
+	 *
+	 * @param string $input Datetime string from the UI.
+	 *
+	 * @return string
+	 */
+	public static function normalize_datetime( $input ) {
+		if ( empty( $input ) ) {
+			return current_time( 'mysql' );
+		}
+
+		$input    = trim( str_replace( 'T', ' ', $input ) );
+		$timezone = wp_timezone();
+
+		try {
+			$datetime = new \DateTime( $input, $timezone );
+		} catch ( \Exception $e ) {
+			$timestamp = strtotime( $input );
+			if ( false === $timestamp ) {
+				return current_time( 'mysql' );
+			}
+
+			$datetime = new \DateTime( 'now', $timezone );
+			$datetime->setTimestamp( $timestamp );
+		}
+
+		return $datetime->format( 'Y-m-d H:i:s' );
+	}
+}
