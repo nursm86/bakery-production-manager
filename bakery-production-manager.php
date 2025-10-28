@@ -4,7 +4,6 @@
  * Plugin URI: https://nurislam.online
  * Description: Manage daily bakery production and keep WooCommerce stock in sync with an AJAX powered workflow.
  * Author: Md. Nur Islam
- * Version: 1.0.0
  * Author URI: https://nurislam.online
  * Text Domain: bakery-production-manager
  * Domain Path: /languages

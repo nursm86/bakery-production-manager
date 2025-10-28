@@ -139,10 +139,6 @@
 					placeholder: bpmProduction.unitTypes.length ? bpmProduction.unitTypes[0] : 'unit',
 				});
 			}
-				tags: true,
-				width: '100%',
-				placeholder: bpmProduction.unitTypes.length ? bpmProduction.unitTypes[0] : 'unit',
-			});
 		},
 
 		populateUnits($select) {
