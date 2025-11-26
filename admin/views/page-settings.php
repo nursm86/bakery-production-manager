@@ -46,17 +46,6 @@ $summary_email       = isset( $settings['summary_email'] ) ? $settings['summary_
 					</tr>
 					<tr>
 						<th scope="row">
-							<?php esc_html_e( 'Enable Decimal Quantities?', 'bakery-production-manager' ); ?>
-						</th>
-						<td>
-							<label>
-								<input type="checkbox" name="enable_decimal_quantities" value="1" <?php checked( ! empty( $settings['enable_decimal_quantities'] ) ); ?> />
-								<?php esc_html_e( 'Allow customers to purchase fractional quantities (e.g. 0.5 kg).', 'bakery-production-manager' ); ?>
-							</label>
-						</td>
-					</tr>
-					<tr>
-						<th scope="row">
 							<label for="bpm-summary-email"><?php esc_html_e( 'Daily summary email', 'bakery-production-manager' ); ?></label>
 						</th>
 						<td>
