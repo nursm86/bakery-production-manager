@@ -35,9 +35,10 @@ class BPM_Helpers {
 	 */
 	public function get_settings() {
 		$defaults = array(
-			'unit_types'           => array( 'kg', 'litre', 'piece' ),
-			'enable_manage_stock'  => 1,
-			'summary_email'        => '',
+			'unit_types'              => array( 'kg', 'litre', 'piece' ),
+			'enable_manage_stock'     => 1,
+			'enable_decimal_quantities' => 0,
+			'summary_email'           => '',
 		);
 
 		$settings = get_option( 'bpm_settings', array() );
@@ -50,8 +51,9 @@ class BPM_Helpers {
 			? array_values( array_filter( array_map( 'sanitize_text_field', $settings['unit_types'] ) ) )
 			: $defaults['unit_types'];
 
-		$settings['enable_manage_stock'] = isset( $settings['enable_manage_stock'] ) ? (int) (bool) $settings['enable_manage_stock'] : $defaults['enable_manage_stock'];
-		$settings['summary_email']       = isset( $settings['summary_email'] ) ? sanitize_email( $settings['summary_email'] ) : $defaults['summary_email'];
+		$settings['enable_manage_stock']     = isset( $settings['enable_manage_stock'] ) ? (int) (bool) $settings['enable_manage_stock'] : $defaults['enable_manage_stock'];
+		$settings['enable_decimal_quantities'] = isset( $settings['enable_decimal_quantities'] ) ? (int) (bool) $settings['enable_decimal_quantities'] : $defaults['enable_decimal_quantities'];
+		$settings['summary_email']           = isset( $settings['summary_email'] ) ? sanitize_email( $settings['summary_email'] ) : $defaults['summary_email'];
 
 		return wp_parse_args( $settings, $defaults );
 	}
@@ -67,9 +69,10 @@ class BPM_Helpers {
 		$settings = wp_parse_args(
 			$settings,
 			array(
-				'unit_types'           => array(),
-				'enable_manage_stock'  => 0,
-				'summary_email'        => '',
+				'unit_types'              => array(),
+				'enable_manage_stock'     => 0,
+				'enable_decimal_quantities' => 0,
+				'summary_email'           => '',
 			)
 		);
 
@@ -85,9 +88,10 @@ class BPM_Helpers {
 		}
 
 		$payload = array(
-			'unit_types'           => ! empty( $unit_types ) ? $unit_types : array( 'kg', 'litre', 'piece' ),
-			'enable_manage_stock'  => ! empty( $settings['enable_manage_stock'] ) ? 1 : 0,
-			'summary_email'        => ! empty( $settings['summary_email'] ) ? sanitize_email( $settings['summary_email'] ) : '',
+			'unit_types'              => ! empty( $unit_types ) ? $unit_types : array( 'kg', 'litre', 'piece' ),
+			'enable_manage_stock'     => ! empty( $settings['enable_manage_stock'] ) ? 1 : 0,
+			'enable_decimal_quantities' => ! empty( $settings['enable_decimal_quantities'] ) ? 1 : 0,
+			'summary_email'           => ! empty( $settings['summary_email'] ) ? sanitize_email( $settings['summary_email'] ) : '',
 		);
 
 		update_option( 'bpm_settings', $payload );
