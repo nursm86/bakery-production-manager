@@ -1,0 +1,115 @@
+/* RIM Admin CSS */
+.rim-wrap {
+    margin-top: 20px;
+}
+
+.rim-button {
+    margin-bottom: 20px !important;
+}
+
+.rim-panel {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, .04);
+    padding: 20px;
+    border-radius: 4px;
+}
+
+/* Modal */
+.rim-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 100000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.rim-modal.is-visible {
+    display: flex;
+}
+
+.rim-modal__overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.rim-modal__content {
+    background: #fff;
+    width: 500px;
+    max-width: 90%;
+    border-radius: 4px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    max-height: 90vh;
+}
+
+.rim-modal__header {
+    padding: 15px 20px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.rim-modal__header h2 {
+    margin: 0;
+    font-size: 1.2em;
+}
+
+.rim-modal__close {
+    background: none;
+    border: none;
+    font-size: 1.5em;
+    cursor: pointer;
+    color: #666;
+}
+
+.rim-form {
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.rim-field {
+    margin-bottom: 15px;
+}
+
+.rim-field label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
+}
+
+.rim-field input,
+.rim-field select {
+    width: 100%;
+}
+
+.rim-required {
+    color: #d63638;
+}
+
+.rim-modal__footer {
+    padding: 15px 20px;
+    border-top: 1px solid #eee;
+    text-align: right;
+    background: #f9f9f9;
+}
+
+.rim-modal__footer .button {
+    margin-left: 10px;
+}
+
+[x-cloak] {
+    display: none !important;
+}

@@ -48,6 +48,13 @@ require_once BPM_PLUGIN_DIR . 'includes/class-bpm-assets.php';
 require_once BPM_PLUGIN_DIR . 'includes/class-bpm-ajax.php';
 require_once BPM_PLUGIN_DIR . 'includes/class-bpm-reports.php';
 
+// Inventory (Merged from RIM)
+require_once BPM_PLUGIN_DIR . 'includes/inventory/helpers.php';
+require_once BPM_PLUGIN_DIR . 'includes/inventory/class-rim-activator.php';
+require_once BPM_PLUGIN_DIR . 'includes/inventory/class-rim-admin.php';
+require_once BPM_PLUGIN_DIR . 'includes/inventory/class-rim-ajax.php';
+require_once BPM_PLUGIN_DIR . 'includes/inventory/class-rim-email.php';
+
 /**
  * Prepare plugin activation.
  */
@@ -167,6 +174,14 @@ final class BPM_Plugin {
 		$this->container['assets']     = new BPM_Assets();
 		$this->container['ajax']       = new BPM_Ajax();
 		$this->container['reports']    = new BPM_Reports();
+
+		// Initialize Inventory
+		if ( is_admin() ) {
+			$this->container['rim_admin'] = new RIM_Admin();
+			$this->container['rim_admin']->hooks();
+		}
+		$this->container['rim_ajax'] = new RIM_Ajax();
+		$this->container['rim_ajax']->hooks();
 
 		do_action( 'bpm_plugin_loaded', $this );
 	}

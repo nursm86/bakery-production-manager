@@ -51,8 +51,19 @@ class BPM_Activator {
 			KEY created_at (created_at)
 		) {$charset_collate};";
 
+		$cold_storage_table = $wpdb->prefix . 'bakery_cold_storage';
+		$cold_storage_sql = "CREATE TABLE {$cold_storage_table} (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			product_id BIGINT UNSIGNED NOT NULL,
+			quantity FLOAT NOT NULL DEFAULT 0,
+			updated_at DATETIME NOT NULL,
+			PRIMARY KEY  (id),
+			UNIQUE KEY product_id (product_id)
+		) {$charset_collate};";
+
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 		dbDelta( $sql );
+		dbDelta( $cold_storage_sql );
 	}
 
 	/**

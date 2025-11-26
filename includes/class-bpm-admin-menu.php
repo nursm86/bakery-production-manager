@@ -36,18 +36,39 @@ class BPM_Admin_Menu {
 	public function register_menu_pages() {
 		$capability = 'manage_woocommerce';
 
-		$this->hooks['production'] = add_menu_page(
-			__( 'Production Entry', 'bakery-production-manager' ),
-			__( 'Bakery Production', 'bakery-production-manager' ),
+		// Main Menu: Bakery Manager
+		add_menu_page(
+			__( 'Bakery Manager', 'bakery-production-manager' ),
+			__( 'Bakery Manager', 'bakery-production-manager' ),
 			$capability,
-			'bakery-production-manager',
-			array( $this, 'render_production_page' ),
-			'dashicons-buddicons-replies',
+			'bakery-manager',
+			array( $this, 'render_dashboard_page' ),
+			'dashicons-store',
 			56
 		);
 
+		// Submenu: Dashboard
+		add_submenu_page(
+			'bakery-manager',
+			__( 'Dashboard', 'bakery-production-manager' ),
+			__( 'Dashboard', 'bakery-production-manager' ),
+			$capability,
+			'bakery-manager',
+			array( $this, 'render_dashboard_page' )
+		);
+
+		// Submenu: Production (Old Main Page)
+		$this->hooks['production'] = add_submenu_page(
+			'bakery-manager',
+			__( 'Production Entry', 'bakery-production-manager' ),
+			__( 'Production', 'bakery-production-manager' ),
+			$capability,
+			'bpm-production',
+			array( $this, 'render_production_page' )
+		);
+
 		$this->hooks['reports'] = add_submenu_page(
-			'bakery-production-manager',
+			'bakery-manager',
 			__( 'Production Reports', 'bakery-production-manager' ),
 			__( 'Reports', 'bakery-production-manager' ),
 			$capability,
@@ -56,7 +77,7 @@ class BPM_Admin_Menu {
 		);
 
 		$this->hooks['settings'] = add_submenu_page(
-			'bakery-production-manager',
+			'bakery-manager',
 			__( 'Bakery Production Settings', 'bakery-production-manager' ),
 			__( 'Settings', 'bakery-production-manager' ),
 			$capability,
@@ -65,6 +86,15 @@ class BPM_Admin_Menu {
 		);
 
 		do_action( 'bpm_admin_menu_registered', $this->hooks );
+	}
+
+	/**
+	 * Render dashboard page.
+	 *
+	 * @return void
+	 */
+	public function render_dashboard_page() {
+		include BPM_PLUGIN_DIR . 'admin/views/page-dashboard.php';
 	}
 
 	/**

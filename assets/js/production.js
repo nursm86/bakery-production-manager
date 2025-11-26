@@ -7,24 +7,32 @@
 	}
 
 	const ProductionApp = {
-	init() {
-		this.$form = $('#bpm-production-form');
-		this.$rowsContainer = $('#bpm-production-rows');
-		this.$summary = $('#bpm-production-summary');
-		this.$dateInput = $('#bpm-production-date');
-		this.template = $('#bpm-row-template').html();
-		this.rowIndex = 0;
+		init() {
+			this.$form = $('#bpm-production-form');
+			this.$rowsContainer = $('#bpm-production-rows');
+			this.$inventoryContainer = $('#bpm-inventory-rows');
+			this.$summary = $('#bpm-production-summary');
+			this.$dateInput = $('#bpm-production-date');
+			this.template = $('#bpm-row-template').html();
+			this.inventoryTemplate = $('#bpm-inventory-row-template').html();
+			this.rowIndex = 0;
+			this.inventoryIndex = 0;
 
-		this.setupDateField();
-		this.bindEvents();
-		this.addRow();
-		this.fetchLatestSummary();
-	},
+			this.setupDateField();
+			this.bindEvents();
+			this.addRow();
+			this.fetchLatestSummary();
+		},
 
-	bindEvents() {
+		bindEvents() {
 			this.$form.on('click', '.bpm-add-row', (event) => {
 				event.preventDefault();
 				this.addRow();
+			});
+
+			this.$form.on('click', '.bpm-add-inventory-row', (event) => {
+				event.preventDefault();
+				this.addInventoryRow();
 			});
 
 			this.$form.on('click', '.bpm-remove-row', (event) => {
@@ -41,24 +49,24 @@
 			this.$form.on('input change', '.bpm-input-produced, .bpm-input-wasted', (event) => {
 				const $row = $(event.currentTarget).closest('.bpm-row');
 				this.updateTotals($row);
-		});
-	},
+			});
+		},
 
-	setupDateField() {
-		if (!this.$dateInput.length) {
-			return;
-		}
+		setupDateField() {
+			if (!this.$dateInput.length) {
+				return;
+			}
 
-		if (!this.$dateInput.val()) {
-			this.$dateInput.val(this.getCurrentDateTimeLocal());
-		}
-	},
+			if (!this.$dateInput.val()) {
+				this.$dateInput.val(this.getCurrentDateTimeLocal());
+			}
+		},
 
-	getCurrentDateTimeLocal() {
-		const now = new Date();
-		now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-		return now.toISOString().slice(0, 16);
-	},
+		getCurrentDateTimeLocal() {
+			const now = new Date();
+			now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+			return now.toISOString().slice(0, 16);
+		},
 
 		addRow() {
 			this.rowIndex += 1;
@@ -71,6 +79,18 @@
 			this.$rowsContainer.append($row);
 			this.initialiseRow($row);
 			this.updateRemoveButtons();
+		},
+
+		addInventoryRow() {
+			this.inventoryIndex += 1;
+			const html = this.inventoryTemplate
+				.replace(/{{rowId}}/g, `inv-row-${this.inventoryIndex}`)
+				.replace(/{{rowNumber}}/g, this.inventoryIndex);
+
+			const $row = $(html);
+
+			this.$inventoryContainer.append($row);
+			this.initialiseInventoryRow($row);
 		},
 
 		initialiseRow($row) {
@@ -141,6 +161,55 @@
 			}
 		},
 
+		initialiseInventoryRow($row) {
+			const $materialSelect = $row.find('.bpm-material-select');
+
+			if (typeof $materialSelect.select2 !== 'function') return;
+
+			$materialSelect.select2({
+				ajax: {
+					url: bpmProduction.ajaxUrl,
+					dataType: 'json',
+					delay: 250,
+					data(params) {
+						return {
+							action: 'rim_list_materials',
+							nonce: bpmProduction.rimNonce, // Use RIM nonce
+							search: params.term || '',
+							page: params.page || 1,
+							per_page: 20
+						};
+					},
+					processResults(response) {
+						if (response && response.success && response.data) {
+							const results = response.data.items.map(item => ({
+								id: item.id,
+								text: item.name,
+								unit: item.unit_type
+							}));
+							return {
+								results: results,
+								pagination: {
+									more: response.data.page < response.data.max_pages
+								}
+							};
+						}
+						return { results: [] };
+					},
+					cache: true,
+				},
+				placeholder: 'Search material...',
+				minimumInputLength: 1,
+				width: '100%',
+			});
+
+			$materialSelect.on('select2:select', (event) => {
+				const selected = event.params.data;
+				$row.attr('data-material-id', selected.id);
+				$row.find('.bpm-input-unit').val(selected.unit);
+			});
+		},
+
 		populateUnits($select) {
 			$select.empty();
 
@@ -156,10 +225,10 @@
 			}
 		},
 
-	fetchProductStock($row, productId) {
-		if (!productId) {
-			return;
-		}
+		fetchProductStock($row, productId) {
+			if (!productId) {
+				return;
+			}
 
 			const $status = $row.find('.bpm-stock-badge');
 			$status.text('Fetching stock…');
@@ -191,43 +260,43 @@
 				.fail((jqXHR) => {
 					this.resetStockMeta($row);
 					const parsed = BPMUtils.parseJsonResponse(jqXHR && jqXHR.responseText ? jqXHR.responseText : null);
-			const message = parsed && parsed.data && parsed.data.message
-				? parsed.data.message
-				: bpmProduction.messages.error;
-			BPMUtils.showNotice(message, 'error');
-			});
-	},
-
-	fetchLatestSummary() {
-		$.ajax({
-			url: bpmProduction.ajaxUrl,
-			method: 'POST',
-			dataType: 'text',
-			data: {
-				action: 'bpm_get_latest_summary',
-				nonce: bpmProduction.nonce,
-			},
-		})
-			.done((rawResponse) => {
-				const response = BPMUtils.parseJsonResponse(rawResponse);
-
-				if (!response || !response.success || !response.data) {
-					return;
-				}
-
-				this.renderSummary(response.data);
-			})
-			.fail((jqXHR) => {
-				const parsed = BPMUtils.parseJsonResponse(jqXHR && jqXHR.responseText ? jqXHR.responseText : null);
-				const message = parsed && parsed.data && parsed.data.message
-					? parsed.data.message
-					: null;
-				if (message) {
+					const message = parsed && parsed.data && parsed.data.message
+						? parsed.data.message
+						: bpmProduction.messages.error;
 					BPMUtils.showNotice(message, 'error');
-				}
-				// Otherwise leave summary untouched on failure.
-			});
-	},
+				});
+		},
+
+		fetchLatestSummary() {
+			$.ajax({
+				url: bpmProduction.ajaxUrl,
+				method: 'POST',
+				dataType: 'text',
+				data: {
+					action: 'bpm_get_latest_summary',
+					nonce: bpmProduction.nonce,
+				},
+			})
+				.done((rawResponse) => {
+					const response = BPMUtils.parseJsonResponse(rawResponse);
+
+					if (!response || !response.success || !response.data) {
+						return;
+					}
+
+					this.renderSummary(response.data);
+				})
+				.fail((jqXHR) => {
+					const parsed = BPMUtils.parseJsonResponse(jqXHR && jqXHR.responseText ? jqXHR.responseText : null);
+					const message = parsed && parsed.data && parsed.data.message
+						? parsed.data.message
+						: null;
+					if (message) {
+						BPMUtils.showNotice(message, 'error');
+					}
+					// Otherwise leave summary untouched on failure.
+				});
+		},
 
 		updateTotals($row) {
 			const produced = parseFloat($row.find('.bpm-input-produced').val()) || 0;
@@ -254,10 +323,17 @@
 		},
 
 		removeRow($row) {
-			if (this.$rowsContainer.find('.bpm-row').length === 1) {
+			const $container = $row.parent();
+			if ($container.is(this.$rowsContainer) && $container.find('.bpm-row').length === 1) {
 				$row.find('select').val(null).trigger('change');
 				$row.find('input').val('');
 				this.resetStockMeta($row);
+				return;
+			}
+
+			// For inventory rows, we can just remove them even if it's the last one
+			if ($container.is(this.$inventoryContainer)) {
+				$row.remove();
 				return;
 			}
 
@@ -286,6 +362,7 @@
 
 		getEntries() {
 			const entries = [];
+			const inventory = [];
 			let isValid = true;
 
 			this.$rowsContainer.find('.bpm-row').each((index, element) => {
@@ -294,6 +371,7 @@
 				const produced = parseFloat($row.find('.bpm-input-produced').val()) || 0;
 				const wasted = parseFloat($row.find('.bpm-input-wasted').val()) || 0;
 				const unitType = $row.find('.bpm-unit-select').val() || '';
+				const productionType = $row.find('.bpm-type-select').val() || 'direct';
 				const note = $row.find('.bpm-input-note').val() || '';
 				const previousStock = parseFloat($row.data('previousStock')) || 0;
 
@@ -307,19 +385,34 @@
 					quantity_produced: produced,
 					quantity_wasted: wasted,
 					unit_type: unitType,
+					production_type: productionType,
 					note,
 					previous_stock: previousStock,
 				});
 			});
 
+			this.$inventoryContainer.find('.bpm-inventory-row').each((index, element) => {
+				const $row = $(element);
+				const materialId = $row.attr('data-material-id') ? parseInt($row.attr('data-material-id'), 10) : 0;
+				const used = parseFloat($row.find('.bpm-input-used').val()) || 0;
+
+				if (materialId && used > 0) {
+					inventory.push({
+						material_id: materialId,
+						quantity: used
+					});
+				}
+			});
+
 			return {
 				entries,
+				inventory,
 				isValid,
 			};
 		},
 
 		save() {
-			const { entries, isValid } = this.getEntries();
+			const { entries, inventory, isValid } = this.getEntries();
 			const productionDate = this.$dateInput.length ? this.$dateInput.val() : '';
 
 			if (!entries.length) {
@@ -347,6 +440,7 @@
 					action: 'bpm_save_production_entries',
 					nonce: bpmProduction.nonce,
 					entries: JSON.stringify(entries),
+					inventory: JSON.stringify(inventory),
 					production_date: productionDate,
 				},
 			})
@@ -428,14 +522,16 @@
 			this.$summary.html(summary);
 		},
 
-	resetForm() {
-		this.$rowsContainer.empty();
-		this.rowIndex = 0;
-		this.addRow();
-		if (this.$dateInput.length) {
-			this.$dateInput.val(this.getCurrentDateTimeLocal());
-		}
-	},
+		resetForm() {
+			this.$rowsContainer.empty();
+			this.$inventoryContainer.empty();
+			this.rowIndex = 0;
+			this.inventoryIndex = 0;
+			this.addRow();
+			if (this.$dateInput.length) {
+				this.$dateInput.val(this.getCurrentDateTimeLocal());
+			}
+		},
 	};
 
 	$(document).ready(() => {

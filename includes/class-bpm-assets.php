@@ -30,7 +30,7 @@ class BPM_Assets {
 	 */
     public function enqueue_admin_assets( $hook_suffix ) {
         // Load assets on any Bakery Production Manager screen
-        $is_plugin_screen = ( false !== strpos( (string) $hook_suffix, 'bakery-production-manager' ) );
+        $is_plugin_screen = ( false !== strpos( (string) $hook_suffix, 'bakery-production-manager' ) ) || ( false !== strpos( (string) $hook_suffix, 'bakery-manager' ) );
         if ( ! $is_plugin_screen ) {
             return;
         }
@@ -43,6 +43,14 @@ class BPM_Assets {
 			BPM_PLUGIN_URL . 'admin/css/admin.css',
 			array(),
 			BPM_PLUGIN_VERSION
+		);
+
+		wp_enqueue_script(
+			'bpm-tailwind',
+			'https://cdn.tailwindcss.com',
+			array(),
+			'3.4.1',
+			false
 		);
 
 		wp_enqueue_style(
@@ -68,7 +76,8 @@ class BPM_Assets {
 			true
 		);
 
-		if ( 'toplevel_page_bakery-production-manager' === $hook_suffix ) {
+		// Check for both old toplevel hook (just in case) and new submenu hook
+		if ( 'toplevel_page_bakery-production-manager' === $hook_suffix || false !== strpos( $hook_suffix, 'bpm-production' ) ) {
 			wp_enqueue_script(
 				'bpm-production',
 				BPM_PLUGIN_URL . 'assets/js/production.js',
@@ -83,10 +92,12 @@ class BPM_Assets {
 				array(
 					'ajaxUrl'       => admin_url( 'admin-ajax.php' ),
 					'nonce'         => wp_create_nonce( 'bpm_ajax_nonce' ),
+					'rimNonce'      => wp_create_nonce( 'rim_admin_nonce' ),
 					'unitTypes'     => $unit_types,
 					'debug'         => true,
 					'labels'        => array(
 						'product'      => __( 'Product', 'bakery-production-manager' ),
+						'material'     => __( 'Material', 'bakery-production-manager' ),
 						'totalProduced'=> __( 'Total Produced', 'bakery-production-manager' ),
 						'totalWasted'  => __( 'Total Wasted', 'bakery-production-manager' ),
 						'submittedBy'  => __( 'Submitted by', 'bakery-production-manager' ),
@@ -162,6 +173,43 @@ class BPM_Assets {
                     'messages'  => array(
                         'saved' => __( 'Settings updated successfully.', 'bakery-production-manager' ),
                         'error' => __( 'Unable to save settings. Please try again.', 'bakery-production-manager' ),
+                    ),
+                )
+            );
+        }
+        if ( 'toplevel_page_bakery-manager' === $hook_suffix ) {
+            wp_enqueue_style(
+                'bpm-dashboard',
+                BPM_PLUGIN_URL . 'admin/css/dashboard.css',
+                array( 'bpm-admin' ),
+                BPM_PLUGIN_VERSION
+            );
+
+            wp_enqueue_script(
+                'bpm-dashboard',
+                BPM_PLUGIN_URL . 'assets/js/dashboard.js',
+                array( 'jquery', 'bpm-select2', 'bpm-utils' ),
+                BPM_PLUGIN_VERSION,
+                true
+            );
+
+            wp_localize_script(
+                'bpm-dashboard',
+                'bpmDashboard',
+                array(
+                    'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+                    'nonce'   => wp_create_nonce( 'bpm_ajax_nonce' ),
+                    'rimNonce'=> wp_create_nonce( 'rim_admin_nonce' ),
+                    'labels'  => array(
+                        'searchPlaceholder' => __( 'Search for a product...', 'bakery-production-manager' ),
+                    ),
+                    'messages' => array(
+                        'saved'      => __( 'Production saved successfully.', 'bakery-production-manager' ),
+                        'usageSaved' => __( 'Inventory usage recorded.', 'bakery-production-manager' ),
+                        'error'      => __( 'Something went wrong.', 'bakery-production-manager' ),
+                        'validation' => __( 'Please fill in all fields.', 'bakery-production-manager' ),
+                        'enterCookQty' => __( 'Enter quantity to cook:', 'bakery-production-manager' ),
+                        'invalidQty'   => __( 'Invalid quantity.', 'bakery-production-manager' ),
                     ),
                 )
             );

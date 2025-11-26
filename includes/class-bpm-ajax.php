@@ -25,6 +25,7 @@ class BPM_Ajax {
 		add_action( 'wp_ajax_bpm_export_csv', array( $this, 'export_csv' ) );
 		add_action( 'wp_ajax_bpm_save_settings', array( $this, 'save_settings' ) );
 		add_action( 'wp_ajax_bpm_get_latest_summary', array( $this, 'get_latest_summary' ) );
+		add_action( 'wp_ajax_bpm_cook_cold_storage', array( $this, 'cook_cold_storage' ) );
 	}
 
 	/**
@@ -228,11 +229,19 @@ class BPM_Ajax {
 		$this->verify_request();
 
 		$raw_entries = isset( $_POST['entries'] ) ? wp_unslash( $_POST['entries'] ) : array();
+		$raw_inventory = isset( $_POST['inventory'] ) ? wp_unslash( $_POST['inventory'] ) : array();
 
 		if ( is_string( $raw_entries ) ) {
 			$decoded = json_decode( $raw_entries, true );
 			if ( json_last_error() === JSON_ERROR_NONE ) {
 				$raw_entries = $decoded;
+			}
+		}
+
+		if ( is_string( $raw_inventory ) ) {
+			$decoded = json_decode( $raw_inventory, true );
+			if ( json_last_error() === JSON_ERROR_NONE ) {
+				$raw_inventory = $decoded;
 			}
 		}
 
@@ -247,6 +256,7 @@ class BPM_Ajax {
 
 		$current_user_id = get_current_user_id();
 		$production_date = isset( $_POST['production_date'] ) ? sanitize_text_field( wp_unslash( $_POST['production_date'] ) ) : '';
+		$production_type = isset( $_POST['production_type'] ) ? sanitize_text_field( wp_unslash( $_POST['production_type'] ) ) : 'direct';
 		$timestamp       = BPM_Helpers::normalize_datetime( $production_date );
 		$table_name      = $wpdb->prefix . 'bakery_production_log';
 
@@ -259,6 +269,49 @@ class BPM_Ajax {
 		$total_produced  = 0;
 		$total_wasted    = 0;
 		$errors          = array();
+
+		// Process Inventory Usage
+		if ( ! empty( $raw_inventory ) && is_array( $raw_inventory ) ) {
+			foreach ( $raw_inventory as $item ) {
+				$material_id = isset( $item['material_id'] ) ? absint( $item['material_id'] ) : 0;
+				$quantity    = isset( $item['quantity'] ) ? (float) $item['quantity'] : 0;
+
+				if ( $material_id && $quantity > 0 ) {
+					// Deduct from RIM Materials
+					$material_table = $wpdb->prefix . 'rim_raw_materials';
+					$trans_table    = $wpdb->prefix . 'rim_transactions';
+					
+					$current_qty = $wpdb->get_var( $wpdb->prepare( "SELECT quantity FROM {$material_table} WHERE id = %d", $material_id ) );
+					
+					if ( null !== $current_qty ) {
+						$new_qty = max( 0, (float) $current_qty - $quantity );
+						
+						$wpdb->update( 
+							$material_table, 
+							array( 
+								'quantity' => $new_qty,
+								'last_updated' => current_time( 'mysql' ),
+								'last_edited_by' => $current_user_id
+							), 
+							array( 'id' => $material_id ) 
+						);
+
+						$wpdb->insert(
+							$trans_table,
+							array(
+								'material_id' => $material_id,
+								'type' => 'use',
+								'quantity' => $quantity,
+								'transaction_date' => $timestamp,
+								'reason' => 'Production Usage',
+								'created_by' => $current_user_id,
+								'created_at' => current_time( 'mysql' )
+							)
+						);
+					}
+				}
+			}
+		}
 
 		foreach ( $raw_entries as $entry ) {
 			$product_id        = isset( $entry['product_id'] ) ? absint( $entry['product_id'] ) : 0;
@@ -297,35 +350,56 @@ class BPM_Ajax {
 				$new_stock = 0;
 			}
 
-			$product->set_stock_quantity( $new_stock );
-			$product->set_stock_status( $new_stock > 0 ? 'instock' : 'outofstock' );
-			$product->save();
+			$entry_production_type = isset( $entry['production_type'] ) ? sanitize_text_field( $entry['production_type'] ) : $production_type;
 
-			$wpdb->insert(
-				$table_name,
-				array(
-					'product_id'        => $product_id,
-					'quantity_produced' => $quantity_produced,
-					'quantity_wasted'   => $quantity_wasted,
-					'previous_stock'    => $previous_stock,
-					'new_stock'         => $new_stock,
-					'unit_type'         => $unit_type,
-					'note'              => $note,
-					'created_by'        => $current_user_id,
-					'created_at'        => $timestamp,
-				),
-				array(
-					'%d',
-					'%f',
-					'%f',
-					'%f',
-					'%f',
-					'%s',
-					'%s',
-					'%d',
-					'%s',
-				)
-			);
+			if ( 'cold_storage' === $entry_production_type ) {
+				// Update Cold Storage Table
+				$cold_table = $wpdb->prefix . 'bakery_cold_storage';
+				$existing_cold = $wpdb->get_var( $wpdb->prepare( "SELECT quantity FROM {$cold_table} WHERE product_id = %d", $product_id ) );
+				
+				if ( null !== $existing_cold ) {
+					$new_cold_stock = (float) $existing_cold + $quantity_produced;
+					$wpdb->update( $cold_table, array( 'quantity' => $new_cold_stock, 'updated_at' => current_time( 'mysql' ) ), array( 'product_id' => $product_id ) );
+				} else {
+					$new_cold_stock = $quantity_produced;
+					$wpdb->insert( $cold_table, array( 'product_id' => $product_id, 'quantity' => $new_cold_stock, 'updated_at' => current_time( 'mysql' ) ) );
+				}
+				// Do NOT update WC stock for cold storage production
+				$new_stock = $previous_stock; 
+			} else {
+				// Direct Production: Update WC Stock
+				$product->set_stock_quantity( $new_stock );
+				$product->set_stock_status( $new_stock > 0 ? 'instock' : 'outofstock' );
+				$product->save();
+			}
+
+			if ( 'cold_storage' !== $entry_production_type ) {
+				$wpdb->insert(
+					$table_name,
+					array(
+						'product_id'        => $product_id,
+						'quantity_produced' => $quantity_produced,
+						'quantity_wasted'   => $quantity_wasted,
+						'previous_stock'    => $previous_stock,
+						'new_stock'         => $new_stock,
+						'unit_type'         => $unit_type,
+						'note'              => $note,
+						'created_by'        => $current_user_id,
+						'created_at'        => $timestamp,
+					),
+					array(
+						'%d',
+						'%f',
+						'%f',
+						'%f',
+						'%f',
+						'%s',
+						'%s',
+						'%d',
+						'%s',
+					)
+				);
+			}
 
 			$response_rows[] = array(
 				'product_id'     => $product_id,
@@ -572,4 +646,70 @@ class BPM_Ajax {
 			)
 		);
 	}
+	/**
+	 * AJAX: Cook items from Cold Storage.
+	 *
+	 * @return void
+	 */
+	public function cook_cold_storage() {
+		global $wpdb;
+		$this->verify_request();
+
+		$product_id = isset( $_POST['product_id'] ) ? absint( $_POST['product_id'] ) : 0;
+		$quantity   = isset( $_POST['quantity'] ) ? (float) $_POST['quantity'] : 0;
+
+		if ( ! $product_id || $quantity <= 0 ) {
+			$this->send_error( __( 'Invalid product or quantity.', 'bakery-production-manager' ) );
+		}
+
+		$cold_table = $wpdb->prefix . 'bakery_cold_storage';
+		$current_cold = $wpdb->get_var( $wpdb->prepare( "SELECT quantity FROM {$cold_table} WHERE product_id = %d", $product_id ) );
+
+		if ( null === $current_cold || (float) $current_cold < $quantity ) {
+			$this->send_error( __( 'Not enough items in Cold Storage.', 'bakery-production-manager' ) );
+		}
+
+		// 1. Deduct from Cold Storage
+		$new_cold = (float) $current_cold - $quantity;
+		$wpdb->update( $cold_table, array( 'quantity' => $new_cold ), array( 'product_id' => $product_id ) );
+
+		// 2. Add to WooCommerce Stock
+		$product = wc_get_product( $product_id );
+		$new_stock = 0;
+		$previous_stock = 0;
+		if ( $product ) {
+			$previous_stock = (float) $product->get_stock_quantity();
+			$new_stock     = $previous_stock + $quantity;
+			$product->set_stock_quantity( $new_stock );
+			$product->set_stock_status( $new_stock > 0 ? 'instock' : 'outofstock' );
+			$product->save();
+		}
+
+		// 3. Log to Production Log so it appears in summary
+		$table_name = $wpdb->prefix . 'bakery_production_log';
+		$wpdb->insert(
+			$table_name,
+			array(
+				'product_id'        => $product_id,
+				'quantity_produced' => $quantity,
+				'quantity_wasted'   => 0,
+				'previous_stock'    => $previous_stock,
+				'new_stock'         => $new_stock,
+				'unit_type'         => 'cold_storage_cook',
+				'note'              => 'Cooked from Cold Storage',
+				'created_by'        => get_current_user_id(),
+				'created_at'        => current_time( 'mysql' ),
+			),
+			array( '%d', '%f', '%f', '%f', '%f', '%s', '%s', '%d', '%s' )
+		);
+
+		$this->send_success( array(
+			'product_id' => $product_id,
+			'new_cold_stock' => $new_cold,
+			'new_wc_stock' => $new_stock,
+			'message' => __( 'Successfully cooked items from Cold Storage.', 'bakery-production-manager' )
+		) );
+	}
+
+
 }

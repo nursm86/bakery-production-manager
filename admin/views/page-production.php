@@ -26,10 +26,22 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 			<div id="bpm-production-rows" class="bpm-production-rows" aria-live="polite"></div>
 
+			<div class="bpm-section-divider">
+				<h3><?php esc_html_e( 'Inventory Usage (Optional)', 'bakery-production-manager' ); ?></h3>
+				<p class="description"><?php esc_html_e( 'Record raw materials used during this production run.', 'bakery-production-manager' ); ?></p>
+			</div>
+
+			<div id="bpm-inventory-rows" class="bpm-production-rows" aria-live="polite"></div>
+
 			<div class="bpm-actions">
 				<button type="button" class="button bpm-add-row">
 					<span class="dashicons dashicons-plus-alt2" aria-hidden="true"></span>
-					<?php esc_html_e( 'Add another product', 'bakery-production-manager' ); ?>
+					<?php esc_html_e( 'Add product', 'bakery-production-manager' ); ?>
+				</button>
+
+				<button type="button" class="button bpm-add-inventory-row">
+					<span class="dashicons dashicons-plus-alt2" aria-hidden="true"></span>
+					<?php esc_html_e( 'Add material', 'bakery-production-manager' ); ?>
 				</button>
 
 				<button type="submit" class="button button-primary bpm-save-production">
@@ -79,6 +91,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 			</label>
 
 			<label>
+				<span><?php esc_html_e( 'Type', 'bakery-production-manager' ); ?></span>
+				<select class="bpm-type-select">
+					<option value="direct"><?php esc_html_e( 'Direct (Sell)', 'bakery-production-manager' ); ?></option>
+					<option value="cold_storage"><?php esc_html_e( 'Cold Storage', 'bakery-production-manager' ); ?></option>
+				</select>
+			</label>
+
+			<label>
 				<span><?php esc_html_e( 'Note (optional)', 'bakery-production-manager' ); ?></span>
 				<input type="text" class="bpm-input-note" placeholder="<?php esc_attr_e( 'e.g. Night shift batch', 'bakery-production-manager' ); ?>" />
 			</label>
@@ -104,6 +124,34 @@ if ( ! defined( 'ABSPATH' ) ) {
 			<div class="bpm-stock-status">
 				<span class="bpm-stock-badge"><?php esc_html_e( 'Awaiting product selection…', 'bakery-production-manager' ); ?></span>
 			</div>
+		</div>
+	</div>
+</script>
+
+<script type="text/template" id="bpm-inventory-row-template">
+	<div class="bpm-row bpm-inventory-row" data-row="{{rowId}}">
+		<div class="bpm-row-header">
+			<span class="bpm-row-title"><?php esc_html_e( 'Material', 'bakery-production-manager' ); ?> #{{rowNumber}}</span>
+			<button type="button" class="button-link bpm-remove-row" aria-label="<?php esc_attr_e( 'Remove row', 'bakery-production-manager' ); ?>">
+				<span class="dashicons dashicons-trash" aria-hidden="true"></span>
+			</button>
+		</div>
+
+		<div class="bpm-row-grid">
+			<label>
+				<span><?php esc_html_e( 'Raw Material', 'bakery-production-manager' ); ?></span>
+				<select class="bpm-material-select" data-placeholder="<?php esc_attr_e( 'Search material…', 'bakery-production-manager' ); ?>"></select>
+			</label>
+
+			<label>
+				<span><?php esc_html_e( 'Quantity Used', 'bakery-production-manager' ); ?></span>
+				<input type="number" step="0.001" min="0" class="bpm-input-used" placeholder="0" />
+			</label>
+            
+            <label>
+                <span><?php esc_html_e( 'Unit', 'bakery-production-manager' ); ?></span>
+                <input type="text" class="bpm-input-unit" readonly disabled placeholder="-" />
+            </label>
 		</div>
 	</div>
 </script>
