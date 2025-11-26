@@ -16,7 +16,7 @@ $cold_table = $wpdb->prefix . 'bakery_cold_storage';
 $cold_items = $wpdb->get_results( "SELECT * FROM {$cold_table} WHERE quantity > 0 ORDER BY updated_at DESC" );
 
 $log_table = $wpdb->prefix . 'bakery_production_log';
-$recent_production = $wpdb->get_results( "SELECT * FROM {$log_table} ORDER BY created_at DESC LIMIT 5" );
+$recent_production = $wpdb->get_results( "SELECT * FROM {$log_table} ORDER BY created_at DESC LIMIT 10" );
 
 $materials_table = $wpdb->prefix . 'rim_raw_materials';
 $materials = $wpdb->get_results( "SELECT id, name, unit_type, quantity, warning_quantity FROM {$materials_table} ORDER BY name ASC" );
@@ -195,6 +195,13 @@ $cold_storage_count = count($cold_items);
                                     <div class="flex items-center gap-3">
                                         <span class="text-lg font-bold text-indigo-600"><?php echo esc_html( $item->quantity ); ?></span>
                                         <button type="button" 
+                                                class="bpm-waste-cold-storage-btn text-sm bg-rose-100 hover:bg-rose-200 text-rose-700 px-3 py-1.5 rounded-md transition-colors mr-2"
+                                                data-product-id="<?php echo esc_attr( $item->product_id ); ?>"
+                                                data-max-qty="<?php echo esc_attr( $item->quantity ); ?>"
+                                                title="Record Waste">
+                                            <span class="dashicons dashicons-trash" style="font-size:16px;width:16px;height:16px;vertical-align:middle;"></span>
+                                        </button>
+                                        <button type="button" 
                                                 class="bpm-cook-cold-storage-btn text-sm bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-md transition-colors"
                                                 data-product-id="<?php echo esc_attr( $item->product_id ); ?>"
                                                 data-max-qty="<?php echo esc_attr( $item->quantity ); ?>">
@@ -233,9 +240,20 @@ $cold_storage_count = count($cold_items);
                                         </div>
                                     </div>
                                     <div class="text-right">
-                                        <div class="font-bold text-slate-700">+<?php echo esc_html( $log->quantity_produced ); ?></div>
+                                        <?php if ( $log->quantity_produced > 0 ) : ?>
+                                            <div class="font-bold text-slate-700">+<?php echo esc_html( $log->quantity_produced ); ?></div>
+                                        <?php elseif ( 'cold_storage_waste' === $log->unit_type ) : ?>
+                                            <div class="font-bold text-rose-600"><?php esc_html_e( 'Waste', 'bakery-production-manager' ); ?></div>
+                                        <?php else : ?>
+                                            <div class="font-bold text-slate-400">—</div>
+                                        <?php endif; ?>
+
                                         <?php if ( $log->quantity_wasted > 0 ) : ?>
-                                            <div class="text-xs text-rose-500">-<?php echo esc_html( $log->quantity_wasted ); ?> wasted</div>
+                                            <div class="text-xs text-rose-500">-<?php echo esc_html( $log->quantity_wasted ); ?> <?php esc_html_e( 'wasted', 'bakery-production-manager' ); ?></div>
+                                        <?php endif; ?>
+                                        
+                                        <?php if ( 'cold_storage_cook' === $log->unit_type ) : ?>
+                                            <div class="text-xs text-indigo-500"><?php esc_html_e( 'From Cold Storage', 'bakery-production-manager' ); ?></div>
                                         <?php endif; ?>
                                     </div>
                                 </div>

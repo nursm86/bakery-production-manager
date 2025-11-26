@@ -42,7 +42,7 @@ class BPM_Activator {
 			quantity_wasted FLOAT NOT NULL DEFAULT 0,
 			previous_stock FLOAT NOT NULL DEFAULT 0,
 			new_stock FLOAT NOT NULL DEFAULT 0,
-			unit_type VARCHAR(20) NOT NULL DEFAULT '',
+			unit_type VARCHAR(50) NOT NULL DEFAULT '',
 			note TEXT NULL,
 			created_by BIGINT UNSIGNED NOT NULL,
 			created_at DATETIME NOT NULL,
@@ -105,6 +105,9 @@ class BPM_Activator {
 
 		self::maybe_add_column( $table_name, 'previous_stock', "ALTER TABLE {$table_name} ADD COLUMN previous_stock FLOAT NOT NULL DEFAULT 0 AFTER quantity_wasted" );
 		self::maybe_add_column( $table_name, 'new_stock', "ALTER TABLE {$table_name} ADD COLUMN new_stock FLOAT NOT NULL DEFAULT 0 AFTER previous_stock" );
+		
+		// Ensure unit_type is long enough
+		$wpdb->query( "ALTER TABLE {$table_name} MODIFY COLUMN unit_type VARCHAR(50) NOT NULL DEFAULT ''" );
 	}
 
 	/**

@@ -209,7 +209,9 @@ class BPM_Assets {
                         'error'      => __( 'Something went wrong.', 'bakery-production-manager' ),
                         'validation' => __( 'Please fill in all fields.', 'bakery-production-manager' ),
                         'enterCookQty' => __( 'Enter quantity to cook:', 'bakery-production-manager' ),
+                        'enterWasteQty'=> __( 'Enter quantity wasted:', 'bakery-production-manager' ),
                         'invalidQty'   => __( 'Invalid quantity.', 'bakery-production-manager' ),
+                        'wasteRecorded'=> __( 'Waste recorded successfully.', 'bakery-production-manager' ),
                     ),
                 )
             );

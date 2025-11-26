@@ -26,6 +26,7 @@ class BPM_Ajax {
 		add_action( 'wp_ajax_bpm_save_settings', array( $this, 'save_settings' ) );
 		add_action( 'wp_ajax_bpm_get_latest_summary', array( $this, 'get_latest_summary' ) );
 		add_action( 'wp_ajax_bpm_cook_cold_storage', array( $this, 'cook_cold_storage' ) );
+		add_action( 'wp_ajax_bpm_waste_cold_storage', array( $this, 'waste_cold_storage' ) );
 	}
 
 	/**
@@ -685,6 +686,9 @@ class BPM_Ajax {
 			$product->save();
 		}
 
+		$production_date = isset( $_POST['production_date'] ) ? sanitize_text_field( wp_unslash( $_POST['production_date'] ) ) : '';
+		$timestamp       = BPM_Helpers::normalize_datetime( $production_date );
+
 		// 3. Log to Production Log so it appears in summary
 		$table_name = $wpdb->prefix . 'bakery_production_log';
 		$wpdb->insert(
@@ -698,7 +702,7 @@ class BPM_Ajax {
 				'unit_type'         => 'cold_storage_cook',
 				'note'              => 'Cooked from Cold Storage',
 				'created_by'        => get_current_user_id(),
-				'created_at'        => current_time( 'mysql' ),
+				'created_at'        => $timestamp,
 			),
 			array( '%d', '%f', '%f', '%f', '%f', '%s', '%s', '%d', '%s' )
 		);
@@ -708,6 +712,64 @@ class BPM_Ajax {
 			'new_cold_stock' => $new_cold,
 			'new_wc_stock' => $new_stock,
 			'message' => __( 'Successfully cooked items from Cold Storage.', 'bakery-production-manager' )
+		) );
+	}
+
+	/**
+	 * AJAX: Waste items from Cold Storage.
+	 *
+	 * @return void
+	 */
+	public function waste_cold_storage() {
+		global $wpdb;
+		$this->verify_request();
+
+		$product_id = isset( $_POST['product_id'] ) ? absint( $_POST['product_id'] ) : 0;
+		$quantity   = isset( $_POST['quantity'] ) ? (float) $_POST['quantity'] : 0;
+		$note       = isset( $_POST['note'] ) ? sanitize_text_field( wp_unslash( $_POST['note'] ) ) : 'Waste from Cold Storage';
+
+		if ( ! $product_id || $quantity <= 0 ) {
+			$this->send_error( __( 'Invalid product or quantity.', 'bakery-production-manager' ) );
+		}
+
+		$cold_table = $wpdb->prefix . 'bakery_cold_storage';
+		$current_cold = $wpdb->get_var( $wpdb->prepare( "SELECT quantity FROM {$cold_table} WHERE product_id = %d", $product_id ) );
+
+		if ( null === $current_cold || (float) $current_cold < $quantity ) {
+			$this->send_error( __( 'Not enough items in Cold Storage.', 'bakery-production-manager' ) );
+		}
+
+		// 1. Deduct from Cold Storage
+		$new_cold = (float) $current_cold - $quantity;
+		$wpdb->update( $cold_table, array( 'quantity' => $new_cold ), array( 'product_id' => $product_id ) );
+
+		// 2. Log to Production Log as Waste
+		$table_name = $wpdb->prefix . 'bakery_production_log';
+		$product = wc_get_product( $product_id );
+		$current_stock = $product ? (float) $product->get_stock_quantity() : 0;
+		$production_date = isset( $_POST['production_date'] ) ? sanitize_text_field( wp_unslash( $_POST['production_date'] ) ) : '';
+		$timestamp       = BPM_Helpers::normalize_datetime( $production_date );
+
+		$wpdb->insert(
+			$table_name,
+			array(
+				'product_id'        => $product_id,
+				'quantity_produced' => 0,
+				'quantity_wasted'   => $quantity,
+				'previous_stock'    => $current_stock,
+				'new_stock'         => $current_stock,
+				'unit_type'         => 'cold_storage_waste',
+				'note'              => $note,
+				'created_by'        => get_current_user_id(),
+				'created_at'        => $timestamp,
+			),
+			array( '%d', '%f', '%f', '%f', '%f', '%s', '%s', '%d', '%s' )
+		);
+
+		$this->send_success( array(
+			'product_id' => $product_id,
+			'new_cold_stock' => $new_cold,
+			'message' => __( 'Successfully recorded waste from Cold Storage.', 'bakery-production-manager' )
 		) );
 	}
 

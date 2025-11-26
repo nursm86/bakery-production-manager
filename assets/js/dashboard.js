@@ -83,14 +83,53 @@ jQuery(document).ready(function ($) {
             return;
         }
 
+        const localDate = new Date();
+        localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+        const productionDate = localDate.toISOString().slice(0, 16);
+
         $.post(bpmDashboard.ajaxUrl, {
             action: 'bpm_cook_cold_storage',
             nonce: bpmDashboard.nonce,
             product_id: productId,
-            quantity: cookQty
+            quantity: cookQty,
+            production_date: productionDate
         }, function (response) {
             if (response.success) {
                 alert(response.data.message);
+                location.reload();
+            } else {
+                alert(response.data.message || bpmDashboard.messages.error);
+            }
+        });
+    });
+
+    // Waste from Cold Storage
+    $('.bpm-waste-cold-storage-btn').on('click', function () {
+        const productId = $(this).data('product-id');
+        const maxQty = $(this).data('max-qty');
+        const qty = prompt(bpmDashboard.messages.enterWasteQty + ' (Max: ' + maxQty + ')');
+
+        if (qty === null) return; // Cancelled
+
+        const wasteQty = parseFloat(qty);
+        if (isNaN(wasteQty) || wasteQty <= 0 || wasteQty > maxQty) {
+            alert(bpmDashboard.messages.invalidQty);
+            return;
+        }
+
+        const localDate = new Date();
+        localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+        const productionDate = localDate.toISOString().slice(0, 16);
+
+        $.post(bpmDashboard.ajaxUrl, {
+            action: 'bpm_waste_cold_storage',
+            nonce: bpmDashboard.nonce,
+            product_id: productId,
+            quantity: wasteQty,
+            production_date: productionDate
+        }, function (response) {
+            if (response.success) {
+                alert(response.data.message || bpmDashboard.messages.wasteRecorded);
                 location.reload();
             } else {
                 alert(response.data.message || bpmDashboard.messages.error);
