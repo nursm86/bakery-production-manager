@@ -14,7 +14,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
-}
+
 
 if ( ! defined( 'BPM_PLUGIN_VERSION' ) ) {
 	define( 'BPM_PLUGIN_VERSION', '1.0.0' );
